@@ -3,12 +3,12 @@ import packageJson from "../../package.json";
 const currentYear = new Date().getFullYear();
 
 export const APP_CONFIG = {
-  name: "Studio Admin",
+  name: "CA Nexus",
   version: packageJson.version,
-  copyright: `© ${currentYear}, Studio Admin.`,
+  copyright: `© ${currentYear}, CA Nexus.`,
   meta: {
-    title: "Studio Admin - Modern Next.js Dashboard Starter Template",
+    title: "CA Nexus - Connected Practice Management for Chartered Accountants",
     description:
-      "Studio Admin is a modern, open-source dashboard starter template built with Next.js 16, Tailwind CSS v4, and shadcn/ui. Perfect for SaaS apps, admin panels, and internal tools—fully customizable and production-ready.",
+      "CA Nexus is a unified, intelligent practice-management and compliance operations platform for Chartered Accountants and CA firms. It centralizes client servicing, matters, compliance, documents, communication, workflows, billing, audit operations, staff operations, reporting and automation.",
   },
 };

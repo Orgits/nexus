@@ -66,8 +66,8 @@
         "noUndeclaredDependencies": "error"
       },
       "nursery": {
-        "useSortedClasses": "on",
-        "useNullishCoalescing": "error",
+        "useSortedClasses": "off",
+        "useNullishCoalescing": "warn",
         "noFloatingPromises": "error",
         "noMisusedPromises": "error"
       },
@@ -92,7 +92,8 @@
         "noEmptyBlockStatements": "error",
         "noUnknownAtRules": "off",
         "noImportCycles": "error",
-        "noUnnecessaryConditions": "warn"
+        "noUnnecessaryConditions": "warn",
+        "noExplicitAny": "warn"
       },
       "complexity": {
         "noImportantStyles": "off"

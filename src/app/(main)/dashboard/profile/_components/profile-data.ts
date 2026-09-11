@@ -61,9 +61,9 @@ export interface ProfileRecord {
 }
 
 export const profile: ProfileRecord = {
-  name: "Arham Khan",
+  name: "Anubhav Sharma",
   preferredName: "Arham",
-  legalName: "Arham Khan",
+  legalName: "Anubhav Sharma",
   pronouns: "He / him",
   initials: "AK",
   avatar: "https://avatars.githubusercontent.com/u/43849669",
@@ -106,7 +106,7 @@ export const profile: ProfileRecord = {
   leaveYear: "January 1–December 31, 2026",
   nextLeave: "August 24–28, 2026",
   lastWorkingDay: "October 3, 2026",
-  updatedBy: "Arham Khan",
+  updatedBy: "Anubhav Sharma",
   updatedAt: "August 8, 2026",
   documents: [
     {

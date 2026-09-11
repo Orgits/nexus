@@ -1,7 +1,7 @@
 export const users = [
   {
     id: "1",
-    name: "Arham Khan",
+    name: "Anubhav Sharma",
     username: "Aarhamkhnz",
     email: "hello@arhamkhnz.com",
     avatar: "https://avatars.githubusercontent.com/u/43849669",
@@ -9,7 +9,7 @@ export const users = [
   },
   {
     id: "2",
-    name: "Ammar Khan",
+    name: "Sahil Goyal",
     username: "ammarkhnz",
     email: "hello@ammarkhnz.com",
     avatar: "",

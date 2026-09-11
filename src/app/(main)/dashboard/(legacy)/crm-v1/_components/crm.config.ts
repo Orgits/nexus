@@ -266,7 +266,7 @@ export const recentLeadsData = [
   },
   {
     id: "L-1007",
-    name: "Arham Khan",
+    name: "Anubhav Sharma",
     company: "Weblabs Studio",
     status: "Won",
     source: "Website",

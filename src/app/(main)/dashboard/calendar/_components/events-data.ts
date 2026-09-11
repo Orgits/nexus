@@ -18,5 +18,5 @@ export const demoEvents = [
   { title: "Ops handoff", start: dt(18, 16), end: dt(18, 16, 45) },
   { title: "Quarterly report due", start: d(24), allDay: true },
   { title: "Reset day", start: d(28), allDay: true },
-  { title: "Arham Khan Birthday", start: new Date(currentYear, 8, 6), allDay: true },
+  { title: "Anubhav Sharma Birthday", start: new Date(currentYear, 8, 6), allDay: true },
 ];

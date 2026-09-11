@@ -1257,6 +1257,6 @@ export const conversations: Conversation[] = [
 ];
 
 export const currentUser = {
-  name: "Arham Khan",
+  name: "Anubhav Sharma",
   email: "arham.khan@weblabs.studio",
 };

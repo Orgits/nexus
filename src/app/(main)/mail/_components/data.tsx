@@ -2,7 +2,7 @@ import { Archive, CircleHelp, File, Inbox, Keyboard, type LucideIcon, Send, Star
 import { siFigma, siGoogledocs, siGooglephotos } from "simple-icons";
 
 const arhamKhan = {
-  name: "Arham Khan",
+  name: "Anubhav Sharma",
   email: "hello@arhamkhnz.com",
 };
 
@@ -470,7 +470,7 @@ export const mailNavigation: MailNavigation = {
 export const accounts = [
   {
     id: 1,
-    label: "Arham Khan",
+    label: "Anubhav Sharma",
     email: "hello@arhamkhnz.com",
   },
   {
