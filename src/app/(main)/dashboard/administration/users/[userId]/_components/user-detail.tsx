@@ -36,7 +36,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDate } from "@/lib/format";
 import { mockClients } from "@/mock-data/clients";
-import { getComplianceCyclesByUser, mockComplianceCycles } from "@/mock-data/compliance";
+import { getComplianceCyclesByUser } from "@/mock-data/compliance";
 import { mockTeamWorkload } from "@/mock-data/dashboard";
 import { mockMatters, mockTasks } from "@/mock-data/matters";
 import { getReviewsByAssignedUser } from "@/mock-data/reviews";

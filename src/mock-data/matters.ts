@@ -1034,6 +1034,11 @@ export const getTasksByUser = (userId: string): Task[] => mockTasks.filter((t) =
 export const getTasksByStatus = (status: TaskStatus): Task[] => mockTasks.filter((t) => t.status === status);
 export const getTaskById = (id: string): Task | undefined => mockTasks.find((t) => t.id === id);
 
+export const getOverdueTasks = (): Task[] => {
+  const now = new Date();
+  return mockTasks.filter((t) => t.status !== "completed" && t.status !== "cancelled" && new Date(t.dueDate) < now);
+};
+
 export const getTasksByComplianceCycle = (complianceCycleId: string): Task[] => {
   const matterIds = mockMatters.filter((m) => m.complianceCycleId === complianceCycleId).map((m) => m.id);
   return mockTasks.filter((t) => t.matterId && matterIds.includes(t.matterId));
@@ -1052,3 +1057,20 @@ export const getTasksByDocument = (documentId: string): Task[] => {
     .map((c) => c.linkedTaskId!);
   return mockTasks.filter((t) => linkedTaskIds.includes(t.id));
 };
+
+export const mockServices = [
+  { serviceType: "itr", serviceName: "Income Tax Return Filing" },
+  { serviceType: "gst_monthly", serviceName: "GST Monthly Return Filing" },
+  { serviceType: "gst_quarterly", serviceName: "GST Quarterly Return Filing (QRMP)" },
+  { serviceType: "tds_24q", serviceName: "TDS Return Filing - 24Q (Salary)" },
+  { serviceType: "tds_26q", serviceName: "TDS Return Filing - 26Q (Non-Salary)" },
+  { serviceType: "tds_27q", serviceName: "TDS Return Filing - 27Q (Non-Resident)" },
+  { serviceType: "audit_statutory", serviceName: "Statutory Audit" },
+  { serviceType: "audit_tax", serviceName: "Tax Audit" },
+  { serviceType: "advisory_tax", serviceName: "Tax Advisory" },
+  { serviceType: "advisory_corporate", serviceName: "Corporate Advisory" },
+  { serviceType: "mca_aoc4", serviceName: "MCA AOC-4 Filing" },
+  { serviceType: "mca_mgt7", serviceName: "MCA MGT-7 Filing" },
+  { serviceType: "mca_adt1", serviceName: "MCA ADT-1 Filing" },
+  { serviceType: "mca_dpt3", serviceName: "MCA DPT-3 Filing" },
+];

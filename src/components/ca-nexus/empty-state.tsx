@@ -239,15 +239,6 @@ export function ErrorState({
   );
 }
 
-export function LoadingState({ message = "Loading...", className }: { message?: string; className?: string }) {
-  return (
-    <div className={cn("flex flex-col items-center justify-center px-4 py-12", className)}>
-      <div className="mb-4 h-8 w-8 animate-spin rounded-full border-primary border-b-2" />
-      <p className="text-muted-foreground text-sm">{message}</p>
-    </div>
-  );
-}
-
 export function SkeletonTable({ rows = 5, columns = 4 }: { rows?: number; columns?: number }) {
   return (
     <div className="rounded-md border">

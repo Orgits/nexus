@@ -16,7 +16,6 @@ import {
   DollarSign,
   FileText,
   Mail,
-  MessageSquare,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";

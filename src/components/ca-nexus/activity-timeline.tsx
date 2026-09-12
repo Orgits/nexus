@@ -4,7 +4,16 @@ import { useState } from "react";
 
 import { cn } from "cn";
 import { formatDistanceToNow } from "date-fns";
-import { AlertCircle, CheckCircle, ExternalLink, FileText, MessageSquare, MoreHorizontal, Receipt } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle,
+  ExternalLink,
+  FileCheck,
+  FileText,
+  MessageSquare,
+  MoreHorizontal,
+  Receipt,
+} from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -33,7 +42,8 @@ export interface ActivityItem {
     | "workpaper"
     | "query"
     | "signoff"
-    | "expense";
+    | "expense"
+    | "compliance";
   title: string;
   description?: string;
   user?: UserType;
@@ -60,6 +70,7 @@ const activityIcons: Record<ActivityItem["type"], React.ReactNode> = {
   query: <MessageSquare className="h-4 w-4 text-purple-500" />,
   signoff: <CheckCircle className="h-4 w-4 text-green-500" />,
   expense: <Receipt className="h-4 w-4 text-orange-500" />,
+  compliance: <FileCheck className="h-4 w-4 text-purple-500" />,
 };
 
 export function ActivityTimeline({
@@ -206,6 +217,7 @@ function getActivityBgColor(type: ActivityItem["type"]): string {
     query: "bg-purple-100 dark:bg-purple-900/30",
     signoff: "bg-green-100 dark:bg-green-900/30",
     expense: "bg-orange-100 dark:bg-orange-900/30",
+    compliance: "bg-purple-100 dark:bg-purple-900/30",
   };
   return colors[type] || colors.system;
 }

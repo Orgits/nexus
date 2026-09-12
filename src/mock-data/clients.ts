@@ -1229,3 +1229,15 @@ export const getClientsByTeam = (teamId: string): Client[] => mockClients.filter
 export const getClientsByStatus = (status: ClientStatus): Client[] => mockClients.filter((c) => c.status === status);
 export const getContactsByClient = (clientId: string): Contact[] => mockContacts.filter((c) => c.clientId === clientId);
 export const getContactById = (id: string): Contact | undefined => mockContacts.find((c) => c.id === id);
+
+export const updateClientOnboarding = async (clientId: string, status: OnboardingStatus): Promise<void> => {
+  const clientIndex = mockClients.findIndex((c) => c.id === clientId);
+  if (clientIndex !== -1) {
+    mockClients[clientIndex] = {
+      ...mockClients[clientIndex],
+      onboardingStatus: status,
+      updatedAt: new Date().toISOString(),
+      updatedBy: IDS.USERS.ADMIN,
+    };
+  }
+};
