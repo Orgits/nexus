@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { AlertTriangle, CheckCircle, Clock, Download, FileText, RotateCcw, Send } from "lucide-react";
 
-import { ActivityTimeline } from "@/components/ca-nexus/activity-timeline";
+import { type ActivityItem, ActivityTimeline } from "@/components/ca-nexus/activity-timeline";
 import { DataTable } from "@/components/ca-nexus/data-table";
 import { EmptyState } from "@/components/ca-nexus/empty-state";
 import { Breadcrumb, ClientLink, MatterLink } from "@/components/ca-nexus/object-link";
@@ -471,7 +471,7 @@ function DocumentRequestActivityTab({
         type: "document" as const,
         title: `Item received: ${item.documentType.replace(/_/g, " ")}`,
         description: item.description ?? "Document received",
-        timestamp: item.receivedAt,
+        timestamp: item.receivedAt!,
         entityUrl: "#",
       })),
     ...(documentRequest.receivedAt
@@ -486,17 +486,19 @@ function DocumentRequestActivityTab({
           },
         ]
       : []),
-  ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  ].filter((a) => !!a.timestamp);
+  const filteredActivities = allActivities as ActivityItem[];
+  filteredActivities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
   return (
     <SectionCard title="Activity Timeline">
-      <ActivityTimeline activities={allActivities} grouped maxItems={50} />
+      <ActivityTimeline activities={filteredActivities} grouped maxItems={50} />
     </SectionCard>
   );
 }
 
 function SendDialog({
-  _documentRequest,
+  documentRequest: _documentRequest,
   onClose,
   onSend,
 }: {
@@ -554,7 +556,7 @@ function SendDialog({
 }
 
 function ReminderDialog({
-  _documentRequest,
+  documentRequest: _documentRequest,
   onClose,
   onReminder,
 }: {

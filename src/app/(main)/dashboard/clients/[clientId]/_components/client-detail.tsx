@@ -59,7 +59,17 @@ import { getDocumentsByClient } from "@/mock-data/documents";
 import { getMattersByClient, getTasksByClient } from "@/mock-data/matters";
 import { getInvoicesByClient } from "@/mock-data/time-billing";
 import { getTeamById, getUserById, type mockTeams, type mockUsers } from "@/mock-data/users";
-import type { Client, Communication, Contact, Conversation, Document, Invoice, Matter, Task } from "@/types";
+import type {
+  Client,
+  Communication,
+  Contact,
+  Conversation,
+  Document,
+  Invoice,
+  Matter,
+  OnboardingStage,
+  Task,
+} from "@/types";
 
 interface ClientDetailProps {
   clientId: string;
@@ -185,7 +195,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
         </TabsContent>
 
         <TabsContent value="tasks" className="space-y-4">
-          <ClientTasksTab tasks={tasks} onTaskClick={handleTaskClick} router={router} />
+          <ClientTasksTab tasks={tasks} onTaskClick={handleTaskClick} />
         </TabsContent>
 
         <TabsContent value="documents" className="space-y-4">
@@ -217,11 +227,11 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
         </TabsContent>
 
         <TabsContent value="licenses" className="space-y-4">
-          <ClientLicensesTab client={client} />
+          <ClientLicensesTab _client={client} />
         </TabsContent>
 
         <TabsContent value="activity" className="space-y-4">
-          <ClientActivityTab client={client} matters={matters} tasks={tasks} communications={communications} />
+          <ClientActivityTab _client={client} matters={matters} tasks={tasks} communications={communications} />
         </TabsContent>
 
         <TabsContent value="onboarding" className="space-y-4">
@@ -1306,7 +1316,7 @@ function ClientRegistrationsTab({ client }: { client: Client }) {
   );
 }
 
-function ClientLicensesTab({ _client }: { client: Client }) {
+function ClientLicensesTab({ _client }: { _client: Client }) {
   return (
     <div className="space-y-4">
       <SectionCard title="Licenses & Registrations">
@@ -1341,7 +1351,7 @@ function ClientActivityTab({
   tasks,
   communications,
 }: {
-  client: Client;
+  _client: Client;
   matters: Matter[];
   tasks: Task[];
   communications: Communication[];
@@ -1383,7 +1393,7 @@ function ClientActivityTab({
 function ClientOnboardingTab({ client }: { client: Client }) {
   const { stage, progress, completedStages, pendingItems } = client.onboardingStatus;
 
-  const allStages: { id: string; label: string; description: string }[] = [
+  const allStages: { id: OnboardingStage; label: string; description: string }[] = [
     {
       id: "profile_created",
       label: "Profile Created",

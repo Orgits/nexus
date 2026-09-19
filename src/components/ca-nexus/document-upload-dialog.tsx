@@ -224,17 +224,16 @@ export function DocumentUploadDialog({
             mimeType: file.file.type,
             category,
             documentType,
-            clientId: clientId || undefined,
-            matterId: matterId || undefined,
-            taskId: taskId || undefined,
-            complianceCycleId: complianceCycleId || undefined,
+            clientId: clientId || "client-unknown",
+            matterId: matterId ? matterId : undefined,
+            taskId: taskId ? taskId : undefined,
+            complianceCycleId: complianceCycleId ? complianceCycleId : undefined,
             uploadedById: uploadedById || "user-admin-001",
             tags: tags
               .split(",")
               .map((t) => t.trim())
               .filter(Boolean),
             isConfidential,
-            description: description || undefined,
             version: 1,
             isLatestVersion: true,
             ocrStatus: "pending",

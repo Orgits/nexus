@@ -29,9 +29,13 @@ import type {
   Invoice,
   Matter,
   Notice,
+  OCRStatus,
   Payment,
+  PaymentStatus,
   Review,
+  ReviewStatus,
   Task,
+  TaskStatus,
 } from "@/types";
 
 export interface LinkedRecordGroup {
