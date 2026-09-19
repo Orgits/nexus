@@ -4,7 +4,7 @@
 
 <img src="https://github.com/arhamkhnz/next-shadcn-admin-dashboard/blob/main/media/dashboard.png?version=5" alt="Dashboard Screenshot">
 
-Most admin templates I found, free or paid, felt cluttered, outdated, or too rigid. I built this as a cleaner alternative with features often missing in others, such as theme toggling and layout controls, while keeping the design modern, minimal, and flexible.
+Most admin templates I found, free or paid, felt cluttered, outdated, or too rigid. I built this as a cleaner alternative with features often missing in others, such as theme toggling and lay out controls, while keeping the design modern, minimal, and flexible.
 
 > **View demo:** [studio admin](https://next-shadcn-admin-dashboard.vercel.app)
 
