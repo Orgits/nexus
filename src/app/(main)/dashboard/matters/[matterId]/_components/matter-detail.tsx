@@ -26,7 +26,7 @@ import { ActivityTimeline } from "@/components/ca-nexus/activity-timeline";
 import { DataTable } from "@/components/ca-nexus/data-table";
 import { EmptyCommunications, EmptyDocuments, EmptyState, EmptyTasks } from "@/components/ca-nexus/empty-state";
 import { FilterBar, type FilterConfig } from "@/components/ca-nexus/filter-bar";
-import { ClientLink } from "@/components/ca-nexus/object-link";
+import { Breadcrumb, ClientLink } from "@/components/ca-nexus/object-link";
 import { KeyValueList, SectionCard, StatTile } from "@/components/ca-nexus/page-blocks";
 import { MatterRecordHeader } from "@/components/ca-nexus/record-header";
 import { MatterStatusBadge, PriorityBadge, StatusBadge, TaskStatusBadge } from "@/components/ca-nexus/status-badge";
@@ -41,7 +41,20 @@ import { getDocumentsByMatter } from "@/mock-data/documents";
 import { getMatterById, getTasksByMatter } from "@/mock-data/matters";
 import { getTimeEntriesByMatter } from "@/mock-data/time-billing";
 import { getTeamById, getUserById } from "@/mock-data/users";
-import type { ChecklistItem, Communication, Document, Matter, MatterStage, Subtask, Task, TimeEntry } from "@/types";
+import type {
+  ChecklistItem,
+  Client,
+  Communication,
+  Document,
+  Matter,
+  MatterStage,
+  MatterStageHistory,
+  Subtask,
+  Task,
+  Team,
+  TimeEntry,
+  User,
+} from "@/types";
 
 const matterTabs = [
   { id: "overview", label: "Overview", icon: Briefcase },
@@ -130,6 +143,7 @@ export function MatterDetail({ matterId }: { matterId: string }) {
 
   return (
     <div className="space-y-6">
+      <Breadcrumb items={[{ label: "Matters", href: "/dashboard/matters" }, { label: matter.matterNumber }]} />
       <MatterRecordHeader
         matter={matter}
         client={client}
@@ -238,12 +252,12 @@ function MatterOverviewTab({
   router,
 }: {
   matter: Matter;
-  client: any;
+  client: Client | undefined;
   tasks: Task[];
   timeEntries: TimeEntry[];
-  assignedUser: any;
-  assignedTeam: any;
-  supervisingPartner: any;
+  assignedUser: User | undefined;
+  assignedTeam: Team | undefined;
+  supervisingPartner: User | undefined;
   router: ReturnType<typeof useRouter>;
 }) {
   const pendingTasks = tasks.filter((t) => ["todo", "in_progress", "in_review"].includes(t.status));
@@ -321,52 +335,50 @@ function MatterOverviewTab({
         {tasks.length > 0 ? (
           <DataTable<Task>
             data={tasks.slice(0, 5)}
-            columns={
-              [
-                {
-                  accessorKey: "title",
-                  header: "Task",
-                  cell: ({ row }: { row: { original: Task } }) => <p className="font-medium">{row.original.title}</p>,
-                },
-                {
-                  accessorKey: "status",
-                  header: "Status",
-                  cell: ({ row }: { row: { original: Task } }) => <TaskStatusBadge status={row.original.status} />,
-                },
-                {
-                  accessorKey: "priority",
-                  header: "Priority",
-                  cell: ({ row }: { row: { original: Task } }) => <PriorityBadge priority={row.original.priority} />,
-                },
-                {
-                  accessorKey: "dueDate",
-                  header: "Due",
-                  cell: ({ row }: { row: { original: Task } }) => (
-                    <span
-                      className={cn(
-                        "text-sm",
-                        new Date(row.original.dueDate) < new Date() &&
-                          row.original.status !== "completed" &&
-                          "text-destructive",
-                      )}
-                    >
-                      {formatDate(row.original.dueDate)}
-                    </span>
-                  ),
-                },
-                {
-                  accessorKey: "progress",
-                  header: "Progress",
-                  cell: ({ row }: { row: { original: Task } }) => (
-                    <div className="w-24">
-                      <div className="h-2 overflow-hidden rounded-full bg-muted">
-                        <div className="h-full bg-primary" style={{ width: `${row.original.progress}%` }} />
-                      </div>
+            columns={[
+              {
+                accessorKey: "title",
+                header: "Task",
+                cell: ({ row }) => <p className="font-medium">{row.original.title}</p>,
+              },
+              {
+                accessorKey: "status",
+                header: "Status",
+                cell: ({ row }) => <TaskStatusBadge status={row.original.status} />,
+              },
+              {
+                accessorKey: "priority",
+                header: "Priority",
+                cell: ({ row }) => <PriorityBadge priority={row.original.priority} />,
+              },
+              {
+                accessorKey: "dueDate",
+                header: "Due",
+                cell: ({ row }) => (
+                  <span
+                    className={cn(
+                      "text-sm",
+                      new Date(row.original.dueDate) < new Date() &&
+                        row.original.status !== "completed" &&
+                        "text-destructive",
+                    )}
+                  >
+                    {formatDate(row.original.dueDate)}
+                  </span>
+                ),
+              },
+              {
+                accessorKey: "progress",
+                header: "Progress",
+                cell: ({ row }) => (
+                  <div className="w-24">
+                    <div className="h-2 overflow-hidden rounded-full bg-muted">
+                      <div className="h-full bg-primary" style={{ width: `${row.original.progress}%` }} />
                     </div>
-                  ),
-                },
-              ] as any
-            }
+                  </div>
+                ),
+              },
+            ]}
             getRowId={(row) => row.id}
             pageSize={5}
             emptyMessage="No tasks"
@@ -402,6 +414,25 @@ function MatterLifecycleTab({ matter }: { matter: Matter }) {
     }
   };
 
+  const getStageBorderClass = (isCompleted: boolean, isCurrent: boolean) => {
+    if (isCompleted) return "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/10";
+    if (isCurrent) return "border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/10";
+    return "bg-muted/30";
+  };
+
+  const getStageCircleClass = (isCompleted: boolean, isCurrent: boolean, status: MatterStage) => {
+    if (isCompleted) return "bg-green-500 text-white";
+    if (isCurrent) return "bg-primary text-white";
+    if (status === "rework") return "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400";
+    return "bg-muted text-muted-foreground";
+  };
+
+  const getStageTextClass = (isCompleted: boolean, isCurrent: boolean) => {
+    if (isCompleted) return "text-green-700 dark:text-green-300";
+    if (isCurrent) return "text-blue-700 dark:text-blue-300";
+    return "";
+  };
+
   return (
     <div className="space-y-6">
       <SectionCard title="Lifecycle Visualization">
@@ -417,39 +448,20 @@ function MatterLifecycleTab({ matter }: { matter: Matter }) {
                 key={stage.id}
                 className={cn(
                   "flex items-start gap-4 rounded-lg border p-4 transition-colors",
-                  isCompleted
-                    ? "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/10"
-                    : isCurrent
-                      ? "border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/10"
-                      : "bg-muted/30",
+                  getStageBorderClass(isCompleted, isCurrent),
                 )}
               >
                 <div
                   className={cn(
                     "flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full font-medium text-sm",
-                    isCompleted
-                      ? "bg-green-500 text-white"
-                      : isCurrent
-                        ? "bg-blue-500 text-white"
-                        : "bg-muted text-muted-foreground",
+                    getStageCircleClass(isCompleted, isCurrent, stage.id as MatterStage),
                   )}
                 >
                   {isCompleted ? <AlertTriangle className="h-5 w-5" /> : stage.order}
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <span
-                      className={cn(
-                        "font-medium",
-                        isCompleted
-                          ? "text-green-700 dark:text-green-300"
-                          : isCurrent
-                            ? "text-blue-700 dark:text-blue-300"
-                            : "",
-                      )}
-                    >
-                      {stage.label}
-                    </span>
+                    <span className={cn("font-medium", getStageTextClass(isCompleted, isCurrent))}>{stage.label}</span>
                     {isCurrent && (
                       <Badge variant="secondary" className="text-xs">
                         Current
@@ -584,75 +596,69 @@ function MatterTasksTab({ tasks, onTaskClick }: { tasks: Task[]; onTaskClick: (t
       {filteredTasks.length > 0 ? (
         <DataTable<Task>
           data={filteredTasks}
-          columns={
-            [
-              {
-                accessorKey: "title",
-                header: "Task",
-                cell: ({ row }: { row: { original: Task } }) => <p className="font-medium">{row.original.title}</p>,
-              },
-              {
-                accessorKey: "taskNumber",
-                header: "ID",
-                cell: ({ row }: { row: { original: Task } }) => (
-                  <span className="text-muted-foreground text-sm">{row.original.taskNumber}</span>
-                ),
-              },
-              {
-                accessorKey: "status",
-                header: "Status",
-                cell: ({ row }: { row: { original: Task } }) => <TaskStatusBadge status={row.original.status} />,
-              },
-              {
-                accessorKey: "priority",
-                header: "Priority",
-                cell: ({ row }: { row: { original: Task } }) => <PriorityBadge priority={row.original.priority} />,
-              },
-              {
-                accessorKey: "dueDate",
-                header: "Due",
-                cell: ({ row }: { row: { original: Task } }) => (
-                  <span
-                    className={cn(
-                      "text-sm",
-                      new Date(row.original.dueDate) < new Date() &&
-                        row.original.status !== "completed" &&
-                        "text-destructive",
-                    )}
-                  >
-                    {formatDate(row.original.dueDate)}
-                  </span>
-                ),
-              },
-              {
-                accessorKey: "progress",
-                header: "Progress",
-                cell: ({ row }: { row: { original: Task } }) => (
-                  <div className="w-24">
-                    <div className="h-2 overflow-hidden rounded-full bg-muted">
-                      <div className="h-full bg-primary" style={{ width: `${row.original.progress}%` }} />
-                    </div>
+          columns={[
+            {
+              accessorKey: "title",
+              header: "Task",
+              cell: ({ row }: { row: { original: Task } }) => <p className="font-medium">{row.original.title}</p>,
+            },
+            {
+              accessorKey: "taskNumber",
+              header: "ID",
+              cell: ({ row }: { row: { original: Task } }) => (
+                <span className="text-muted-foreground text-sm">{row.original.taskNumber}</span>
+              ),
+            },
+            {
+              accessorKey: "status",
+              header: "Status",
+              cell: ({ row }: { row: { original: Task } }) => <TaskStatusBadge status={row.original.status} />,
+            },
+            {
+              accessorKey: "priority",
+              header: "Priority",
+              cell: ({ row }: { row: { original: Task } }) => <PriorityBadge priority={row.original.priority} />,
+            },
+            {
+              accessorKey: "dueDate",
+              header: "Due",
+              cell: ({ row }: { row: { original: Task } }) => (
+                <span
+                  className={cn(
+                    "text-sm",
+                    new Date(row.original.dueDate) < new Date() &&
+                      row.original.status !== "completed" &&
+                      "text-destructive",
+                  )}
+                >
+                  {formatDate(row.original.dueDate)}
+                </span>
+              ),
+            },
+            {
+              accessorKey: "progress",
+              header: "Progress",
+              cell: ({ row }: { row: { original: Task } }) => (
+                <div className="w-24">
+                  <div className="h-2 overflow-hidden rounded-full bg-muted">
+                    <div className="h-full bg-primary" style={{ width: `${row.original.progress}%` }} />
                   </div>
-                ),
-              },
-              {
-                accessorKey: "estimatedHours",
-                header: "Est. Hours",
-                cell: ({ row }: { row: { original: Task } }) => (
-                  <span className="text-sm">
-                    {row.original.estimatedHours ? `${row.original.estimatedHours}h` : "—"}
-                  </span>
-                ),
-              },
-              {
-                accessorKey: "actualHours",
-                header: "Actual",
-                cell: ({ row }: { row: { original: Task } }) => (
-                  <span className="text-sm">{row.original.actualHours}h</span>
-                ),
-              },
-            ] as any
-          }
+                </div>
+              ),
+            },
+            {
+              accessorKey: "estimatedHours",
+              header: "Est. Hours",
+              cell: ({ row }: { row: { original: Task } }) => (
+                <span className="text-sm">{row.original.estimatedHours ? `${row.original.estimatedHours}h` : "—"}</span>
+              ),
+            },
+            {
+              accessorKey: "actualHours",
+              header: "Actual",
+              cell: ({ row }) => <span className="text-sm">{row.original.actualHours}h</span>,
+            },
+          ]}
           getRowId={(row) => row.id}
           pageSize={10}
           emptyMessage="No tasks match your search or filters"
@@ -704,70 +710,68 @@ function MatterChecklistTab({ tasks, matter }: { tasks: Task[]; matter: Matter }
         {allChecklistItems.length > 0 ? (
           <DataTable<ChecklistItem & { taskTitle: string; taskId: string }>
             data={allChecklistItems}
-            columns={
-              [
-                {
-                  accessorKey: "title",
-                  header: "Item",
-                  cell: ({ row }: { row: { original: ChecklistItem & { taskTitle: string } } }) => (
-                    <p className="font-medium">{row.original.title}</p>
+            columns={[
+              {
+                accessorKey: "title",
+                header: "Item",
+                cell: ({ row }: { row: { original: ChecklistItem & { taskTitle: string } } }) => (
+                  <p className="font-medium">{row.original.title}</p>
+                ),
+              },
+              {
+                accessorKey: "taskTitle",
+                header: "Task",
+                cell: ({ row }: { row: { original: ChecklistItem & { taskTitle: string } } }) => (
+                  <span className="text-muted-foreground text-sm">{row.original.taskTitle}</span>
+                ),
+              },
+              {
+                accessorKey: "isMandatory",
+                header: "Mandatory",
+                cell: ({ row }: { row: { original: ChecklistItem & { taskTitle: string } } }) =>
+                  row.original.isMandatory ? (
+                    <Badge variant="destructive" className="text-xs">
+                      Required
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary" className="text-xs">
+                      Optional
+                    </Badge>
                   ),
-                },
-                {
-                  accessorKey: "taskTitle",
-                  header: "Task",
-                  cell: ({ row }: { row: { original: ChecklistItem & { taskTitle: string } } }) => (
-                    <span className="text-muted-foreground text-sm">{row.original.taskTitle}</span>
+              },
+              {
+                accessorKey: "isCompleted",
+                header: "Status",
+                cell: ({ row }: { row: { original: ChecklistItem & { taskTitle: string } } }) =>
+                  row.original.isCompleted ? (
+                    <Badge variant="default" className="text-xs">
+                      Done
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-xs">
+                      Pending
+                    </Badge>
                   ),
-                },
-                {
-                  accessorKey: "isMandatory",
-                  header: "Mandatory",
-                  cell: ({ row }: { row: { original: ChecklistItem & { taskTitle: string } } }) =>
-                    row.original.isMandatory ? (
-                      <Badge variant="destructive" className="text-xs">
-                        Required
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary" className="text-xs">
-                        Optional
-                      </Badge>
-                    ),
-                },
-                {
-                  accessorKey: "isCompleted",
-                  header: "Status",
-                  cell: ({ row }: { row: { original: ChecklistItem & { taskTitle: string } } }) =>
-                    row.original.isCompleted ? (
-                      <Badge variant="default" className="text-xs">
-                        Done
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-xs">
-                        Pending
-                      </Badge>
-                    ),
-                },
-                {
-                  accessorKey: "completedAt",
-                  header: "Completed",
-                  cell: ({ row }: { row: { original: ChecklistItem & { taskTitle: string } } }) => (
-                    <span className="text-sm">
-                      {row.original.completedAt ? formatDate(row.original.completedAt) : "—"}
-                    </span>
-                  ),
-                },
-                {
-                  accessorKey: "completedBy",
-                  header: "Completed By",
-                  cell: ({ row }: { row: { original: ChecklistItem & { taskTitle: string } } }) => (
-                    <span className="text-sm">
-                      {row.original.completedBy ? getUserById(row.original.completedBy)?.fullName || "—" : "—"}
-                    </span>
-                  ),
-                },
-              ] as any
-            }
+              },
+              {
+                accessorKey: "completedAt",
+                header: "Completed",
+                cell: ({ row }: { row: { original: ChecklistItem & { taskTitle: string } } }) => (
+                  <span className="text-sm">
+                    {row.original.completedAt ? formatDate(row.original.completedAt) : "—"}
+                  </span>
+                ),
+              },
+              {
+                accessorKey: "completedBy",
+                header: "Completed By",
+                cell: ({ row }) => (
+                  <span className="text-sm">
+                    {row.original.completedBy ? (getUserById(row.original.completedBy)?.fullName ?? "—") : "—"}
+                  </span>
+                ),
+              },
+            ]}
             getRowId={(row) => row.id}
             pageSize={15}
             emptyMessage="No checklist items"
@@ -816,47 +820,43 @@ function MatterSubtasksTab({ tasks }: { tasks: Task[] }) {
       {allSubtasks.length > 0 ? (
         <DataTable<Subtask & { taskTitle: string }>
           data={allSubtasks}
-          columns={
-            [
-              {
-                accessorKey: "title",
-                header: "Subtask",
-                cell: ({ row }: { row: { original: Subtask & { taskTitle: string } } }) => (
-                  <p className="font-medium">{row.original.title}</p>
-                ),
-              },
-              {
-                accessorKey: "taskTitle",
-                header: "Parent Task",
-                cell: ({ row }: { row: { original: Subtask & { taskTitle: string } } }) => (
-                  <span className="text-muted-foreground text-sm">{row.original.taskTitle}</span>
-                ),
-              },
-              {
-                accessorKey: "status",
-                header: "Status",
-                cell: ({ row }: { row: { original: Subtask & { taskTitle: string } } }) => (
-                  <TaskStatusBadge status={row.original.status} />
-                ),
-              },
-              {
-                accessorKey: "dueDate",
-                header: "Due",
-                cell: ({ row }: { row: { original: Subtask & { taskTitle: string } } }) => (
-                  <span className="text-sm">{row.original.dueDate ? formatDate(row.original.dueDate) : "—"}</span>
-                ),
-              },
-              {
-                accessorKey: "completedAt",
-                header: "Completed",
-                cell: ({ row }: { row: { original: Subtask & { taskTitle: string } } }) => (
-                  <span className="text-sm">
-                    {row.original.completedAt ? formatDate(row.original.completedAt) : "—"}
-                  </span>
-                ),
-              },
-            ] as any
-          }
+          columns={[
+            {
+              accessorKey: "title",
+              header: "Subtask",
+              cell: ({ row }: { row: { original: Subtask & { taskTitle: string } } }) => (
+                <p className="font-medium">{row.original.title}</p>
+              ),
+            },
+            {
+              accessorKey: "taskTitle",
+              header: "Parent Task",
+              cell: ({ row }: { row: { original: Subtask & { taskTitle: string } } }) => (
+                <span className="text-muted-foreground text-sm">{row.original.taskTitle}</span>
+              ),
+            },
+            {
+              accessorKey: "status",
+              header: "Status",
+              cell: ({ row }: { row: { original: Subtask & { taskTitle: string } } }) => (
+                <TaskStatusBadge status={row.original.status} />
+              ),
+            },
+            {
+              accessorKey: "dueDate",
+              header: "Due",
+              cell: ({ row }: { row: { original: Subtask & { taskTitle: string } } }) => (
+                <span className="text-sm">{row.original.dueDate ? formatDate(row.original.dueDate) : "—"}</span>
+              ),
+            },
+            {
+              accessorKey: "completedAt",
+              header: "Completed",
+              cell: ({ row }: { row: { original: Subtask & { taskTitle: string } } }) => (
+                <span className="text-sm">{row.original.completedAt ? formatDate(row.original.completedAt) : "—"}</span>
+              ),
+            },
+          ]}
           getRowId={(row) => row.id}
           pageSize={15}
           emptyMessage="No subtasks"
@@ -878,52 +878,48 @@ function MatterDocumentsTab({ documents }: { documents: Document[] }) {
   return (
     <DataTable<Document>
       data={documents}
-      columns={
-        [
-          {
-            accessorKey: "originalFileName",
-            header: "Document",
-            cell: ({ row }: { row: { original: Document } }) => (
-              <p className="font-medium">{row.original.originalFileName}</p>
-            ),
-          },
-          {
-            accessorKey: "category",
-            header: "Category",
-            cell: ({ row }: { row: { original: Document } }) => (
-              <Badge variant="secondary">{row.original.category.replace(/_/g, " ")}</Badge>
-            ),
-          },
-          {
-            accessorKey: "documentType",
-            header: "Type",
-            cell: ({ row }: { row: { original: Document } }) => (
-              <span className="text-sm">{row.original.documentType.replace(/_/g, " ")}</span>
-            ),
-          },
-          {
-            accessorKey: "fileSize",
-            header: "Size",
-            cell: ({ row }: { row: { original: Document } }) => (
-              <span className="text-sm">{formatFileSize(row.original.fileSize)}</span>
-            ),
-          },
-          {
-            accessorKey: "ocrStatus",
-            header: "OCR",
-            cell: ({ row }: { row: { original: Document } }) => (
-              <Badge variant="outline">{row.original.ocrStatus.replace(/_/g, " ")}</Badge>
-            ),
-          },
-          {
-            accessorKey: "createdAt",
-            header: "Uploaded",
-            cell: ({ row }: { row: { original: Document } }) => (
-              <span className="text-sm">{formatDate(row.original.createdAt)}</span>
-            ),
-          },
-        ] as any
-      }
+      columns={[
+        {
+          accessorKey: "originalFileName",
+          header: "Document",
+          cell: ({ row }: { row: { original: Document } }) => (
+            <p className="font-medium">{row.original.originalFileName}</p>
+          ),
+        },
+        {
+          accessorKey: "category",
+          header: "Category",
+          cell: ({ row }: { row: { original: Document } }) => (
+            <Badge variant="secondary">{row.original.category.replace(/_/g, " ")}</Badge>
+          ),
+        },
+        {
+          accessorKey: "documentType",
+          header: "Type",
+          cell: ({ row }: { row: { original: Document } }) => (
+            <span className="text-sm">{row.original.documentType.replace(/_/g, " ")}</span>
+          ),
+        },
+        {
+          accessorKey: "fileSize",
+          header: "Size",
+          cell: ({ row }: { row: { original: Document } }) => (
+            <span className="text-sm">{formatFileSize(row.original.fileSize)}</span>
+          ),
+        },
+        {
+          accessorKey: "ocrStatus",
+          header: "OCR",
+          cell: ({ row }: { row: { original: Document } }) => (
+            <Badge variant="outline">{row.original.ocrStatus.replace(/_/g, " ")}</Badge>
+          ),
+        },
+        {
+          accessorKey: "createdAt",
+          header: "Uploaded",
+          cell: ({ row }) => <span className="text-sm">{formatDate(row.original.createdAt)}</span>,
+        },
+      ]}
       getRowId={(row) => row.id}
       pageSize={10}
       emptyMessage="No documents"
@@ -949,43 +945,41 @@ function MatterCommunicationsTab({
   return (
     <DataTable<Communication>
       data={communications}
-      columns={
-        [
-          {
-            accessorKey: "subject",
-            header: "Subject",
-            cell: ({ row }: { row: { original: Communication } }) => (
-              <p className="font-medium">{row.original.subject || row.original.content.slice(0, 60)}</p>
-            ),
-          },
-          {
-            accessorKey: "channel",
-            header: "Channel",
-            cell: ({ row }: { row: { original: Communication } }) => (
-              <Badge variant="secondary">{row.original.channel.toUpperCase()}</Badge>
-            ),
-          },
-          {
-            accessorKey: "direction",
-            header: "Direction",
-            cell: ({ row }: { row: { original: Communication } }) => (
-              <Badge variant="outline">{row.original.direction}</Badge>
-            ),
-          },
-          {
-            accessorKey: "status",
-            header: "Status",
-            cell: ({ row }: { row: { original: Communication } }) => <StatusBadge status={row.original.status} />,
-          },
-          {
-            accessorKey: "sentAt",
-            header: "Sent",
-            cell: ({ row }: { row: { original: Communication } }) => (
-              <span className="text-sm">{row.original.sentAt ? formatDate(row.original.sentAt) : "—"}</span>
-            ),
-          },
-        ] as any
-      }
+      columns={[
+        {
+          accessorKey: "subject",
+          header: "Subject",
+          cell: ({ row }: { row: { original: Communication } }) => (
+            <p className="font-medium">{row.original.subject || row.original.content.slice(0, 60)}</p>
+          ),
+        },
+        {
+          accessorKey: "channel",
+          header: "Channel",
+          cell: ({ row }: { row: { original: Communication } }) => (
+            <Badge variant="secondary">{row.original.channel.toUpperCase()}</Badge>
+          ),
+        },
+        {
+          accessorKey: "direction",
+          header: "Direction",
+          cell: ({ row }: { row: { original: Communication } }) => (
+            <Badge variant="outline">{row.original.direction}</Badge>
+          ),
+        },
+        {
+          accessorKey: "status",
+          header: "Status",
+          cell: ({ row }: { row: { original: Communication } }) => <StatusBadge status={row.original.status} />,
+        },
+        {
+          accessorKey: "sentAt",
+          header: "Sent",
+          cell: ({ row }) => (
+            <span className="text-sm">{row.original.sentAt ? formatDate(row.original.sentAt) : "—"}</span>
+          ),
+        },
+      ]}
       getRowId={(row) => row.id}
       pageSize={10}
       emptyMessage="No communications"
@@ -1023,54 +1017,52 @@ function MatterTimeTab({ timeEntries, matter }: { timeEntries: TimeEntry[]; matt
         {timeEntries.length > 0 ? (
           <DataTable<TimeEntry>
             data={timeEntries}
-            columns={
-              [
-                {
-                  accessorKey: "description",
-                  header: "Description",
-                  cell: ({ row }: { row: { original: TimeEntry } }) => (
-                    <p className="font-medium">{row.original.description}</p>
-                  ),
-                },
-                {
-                  accessorKey: "userId",
-                  header: "User",
-                  cell: ({ row }: { row: { original: TimeEntry } }) => (
-                    <span className="text-sm">{getUserById(row.original.userId)?.fullName || row.original.userId}</span>
-                  ),
-                },
-                {
-                  accessorKey: "startTime",
-                  header: "Start",
-                  cell: ({ row }: { row: { original: TimeEntry } }) => (
-                    <span className="text-sm">{formatDate(row.original.startTime)}</span>
-                  ),
-                },
-                {
-                  accessorKey: "durationMinutes",
-                  header: "Duration",
-                  cell: ({ row }: { row: { original: TimeEntry } }) => (
-                    <span className="text-sm">
-                      {Math.floor(row.original.durationMinutes / 60)}h {row.original.durationMinutes % 60}m
-                    </span>
-                  ),
-                },
-                {
-                  accessorKey: "isBillable",
-                  header: "Billable",
-                  cell: ({ row }: { row: { original: TimeEntry } }) => (
-                    <Badge variant={row.original.isBillable ? "default" : "secondary"} className="text-xs">
-                      {row.original.isBillable ? "Yes" : "No"}
-                    </Badge>
-                  ),
-                },
-                {
-                  accessorKey: "status",
-                  header: "Status",
-                  cell: ({ row }: { row: { original: TimeEntry } }) => <StatusBadge status={row.original.status} />,
-                },
-              ] as any
-            }
+            columns={[
+              {
+                accessorKey: "description",
+                header: "Description",
+                cell: ({ row }: { row: { original: TimeEntry } }) => (
+                  <p className="font-medium">{row.original.description}</p>
+                ),
+              },
+              {
+                accessorKey: "userId",
+                header: "User",
+                cell: ({ row }: { row: { original: TimeEntry } }) => (
+                  <span className="text-sm">{getUserById(row.original.userId)?.fullName || row.original.userId}</span>
+                ),
+              },
+              {
+                accessorKey: "startTime",
+                header: "Start",
+                cell: ({ row }: { row: { original: TimeEntry } }) => (
+                  <span className="text-sm">{formatDate(row.original.startTime)}</span>
+                ),
+              },
+              {
+                accessorKey: "durationMinutes",
+                header: "Duration",
+                cell: ({ row }: { row: { original: TimeEntry } }) => (
+                  <span className="text-sm">
+                    {Math.floor(row.original.durationMinutes / 60)}h {row.original.durationMinutes % 60}m
+                  </span>
+                ),
+              },
+              {
+                accessorKey: "isBillable",
+                header: "Billable",
+                cell: ({ row }: { row: { original: TimeEntry } }) => (
+                  <Badge variant={row.original.isBillable ? "default" : "secondary"} className="text-xs">
+                    {row.original.isBillable ? "Yes" : "No"}
+                  </Badge>
+                ),
+              },
+              {
+                accessorKey: "status",
+                header: "Status",
+                cell: ({ row }) => <StatusBadge status={row.original.status} />,
+              },
+            ]}
             getRowId={(row) => row.id}
             pageSize={10}
             emptyMessage="No time entries"
@@ -1108,32 +1100,30 @@ function MatterReviewTab({ matter, tasks }: { matter: Matter; tasks: Task[] }) {
         {reviewTasks.length > 0 ? (
           <DataTable<Task>
             data={reviewTasks}
-            columns={
-              [
-                {
-                  accessorKey: "title",
-                  header: "Task",
-                  cell: ({ row }: { row: { original: Task } }) => <p className="font-medium">{row.original.title}</p>,
-                },
-                {
-                  accessorKey: "status",
-                  header: "Review Status",
-                  cell: ({ row }: { row: { original: Task } }) => <TaskStatusBadge status={row.original.status} />,
-                },
-                {
-                  accessorKey: "priority",
-                  header: "Priority",
-                  cell: ({ row }: { row: { original: Task } }) => <PriorityBadge priority={row.original.priority} />,
-                },
-                {
-                  accessorKey: "dueDate",
-                  header: "Due",
-                  cell: ({ row }: { row: { original: Task } }) => (
-                    <span className="text-sm">{formatDate(row.original.dueDate)}</span>
-                  ),
-                },
-              ] as any
-            }
+            columns={[
+              {
+                accessorKey: "title",
+                header: "Task",
+                cell: ({ row }: { row: { original: Task } }) => <p className="font-medium">{row.original.title}</p>,
+              },
+              {
+                accessorKey: "status",
+                header: "Review Status",
+                cell: ({ row }: { row: { original: Task } }) => <TaskStatusBadge status={row.original.status} />,
+              },
+              {
+                accessorKey: "priority",
+                header: "Priority",
+                cell: ({ row }: { row: { original: Task } }) => <PriorityBadge priority={row.original.priority} />,
+              },
+              {
+                accessorKey: "dueDate",
+                header: "Due",
+                cell: ({ row }: { row: { original: Task } }) => (
+                  <span className="text-sm">{formatDate(row.original.dueDate)}</span>
+                ),
+              },
+            ]}
             getRowId={(row) => row.id}
             pageSize={10}
             emptyMessage="No review tasks"
@@ -1159,9 +1149,9 @@ function MatterCollaborationTab({
 }: {
   matter: Matter;
   tasks: Task[];
-  assignedUser: any;
-  assignedTeam: any;
-  supervisingPartner: any;
+  assignedUser: User | undefined;
+  assignedTeam: Team | undefined;
+  supervisingPartner: User | undefined;
 }) {
   const teamMembers = [
     { name: assignedUser?.fullName, role: "Assignee", avatar: assignedUser?.avatarUrl },
@@ -1199,34 +1189,30 @@ function MatterCollaborationTab({
       <SectionCard title="Task Assignment">
         <DataTable<Task>
           data={tasks}
-          columns={
-            [
-              {
-                accessorKey: "title",
-                header: "Task",
-                cell: ({ row }: { row: { original: Task } }) => <p className="font-medium">{row.original.title}</p>,
-              },
-              {
-                accessorKey: "assignedUserId",
-                header: "Assignee",
-                cell: ({ row }: { row: { original: Task } }) => (
-                  <span className="text-sm">{getUserById(row.original.assignedUserId)?.fullName || "—"}</span>
-                ),
-              },
-              {
-                accessorKey: "status",
-                header: "Status",
-                cell: ({ row }: { row: { original: Task } }) => <TaskStatusBadge status={row.original.status} />,
-              },
-              {
-                accessorKey: "dueDate",
-                header: "Due",
-                cell: ({ row }: { row: { original: Task } }) => (
-                  <span className="text-sm">{formatDate(row.original.dueDate)}</span>
-                ),
-              },
-            ] as any
-          }
+          columns={[
+            {
+              accessorKey: "title",
+              header: "Task",
+              cell: ({ row }: { row: { original: Task } }) => <p className="font-medium">{row.original.title}</p>,
+            },
+            {
+              accessorKey: "assignedUserId",
+              header: "Assignee",
+              cell: ({ row }: { row: { original: Task } }) => (
+                <span className="text-sm">{getUserById(row.original.assignedUserId)?.fullName || "—"}</span>
+              ),
+            },
+            {
+              accessorKey: "status",
+              header: "Status",
+              cell: ({ row }: { row: { original: Task } }) => <TaskStatusBadge status={row.original.status} />,
+            },
+            {
+              accessorKey: "dueDate",
+              header: "Due",
+              cell: ({ row }) => <span className="text-sm">{formatDate(row.original.dueDate)}</span>,
+            },
+          ]}
           getRowId={(row) => row.id}
           pageSize={10}
           emptyMessage="No tasks"
@@ -1258,47 +1244,45 @@ function MatterBillingTab({ matter, timeEntries }: { matter: Matter; timeEntries
         {timeEntries.filter((t) => t.isBillable && !t.invoiceId).length > 0 ? (
           <DataTable<TimeEntry>
             data={timeEntries.filter((t) => t.isBillable && !t.invoiceId)}
-            columns={
-              [
-                {
-                  accessorKey: "description",
-                  header: "Description",
-                  cell: ({ row }: { row: { original: TimeEntry } }) => (
-                    <p className="font-medium">{row.original.description}</p>
-                  ),
-                },
-                {
-                  accessorKey: "userId",
-                  header: "User",
-                  cell: ({ row }: { row: { original: TimeEntry } }) => (
-                    <span className="text-sm">{getUserById(row.original.userId)?.fullName || "—"}</span>
-                  ),
-                },
-                {
-                  accessorKey: "startTime",
-                  header: "Date",
-                  cell: ({ row }: { row: { original: TimeEntry } }) => (
-                    <span className="text-sm">{formatDate(row.original.startTime)}</span>
-                  ),
-                },
-                {
-                  accessorKey: "durationMinutes",
-                  header: "Hours",
-                  cell: ({ row }: { row: { original: TimeEntry } }) => (
-                    <span className="text-sm">{row.original.durationMinutes / 60}h</span>
-                  ),
-                },
-                {
-                  accessorKey: "billingRate",
-                  header: "Rate",
-                  cell: ({ row }: { row: { original: TimeEntry } }) => (
-                    <span className="text-sm">
-                      {row.original.billingRate ? formatCurrency(row.original.billingRate) : "—"}
-                    </span>
-                  ),
-                },
-              ] as any
-            }
+            columns={[
+              {
+                accessorKey: "description",
+                header: "Description",
+                cell: ({ row }: { row: { original: TimeEntry } }) => (
+                  <p className="font-medium">{row.original.description}</p>
+                ),
+              },
+              {
+                accessorKey: "userId",
+                header: "User",
+                cell: ({ row }: { row: { original: TimeEntry } }) => (
+                  <span className="text-sm">{getUserById(row.original.userId)?.fullName || "—"}</span>
+                ),
+              },
+              {
+                accessorKey: "startTime",
+                header: "Date",
+                cell: ({ row }: { row: { original: TimeEntry } }) => (
+                  <span className="text-sm">{formatDate(row.original.startTime)}</span>
+                ),
+              },
+              {
+                accessorKey: "durationMinutes",
+                header: "Hours",
+                cell: ({ row }: { row: { original: TimeEntry } }) => (
+                  <span className="text-sm">{row.original.durationMinutes / 60}h</span>
+                ),
+              },
+              {
+                accessorKey: "billingRate",
+                header: "Rate",
+                cell: ({ row }) => (
+                  <span className="text-sm">
+                    {row.original.billingRate ? formatCurrency(row.original.billingRate) : "—"}
+                  </span>
+                ),
+              },
+            ]}
             getRowId={(row) => row.id}
             pageSize={10}
             emptyMessage="No unbilled time entries"
@@ -1371,12 +1355,19 @@ function MatterActivityTab({
   );
 }
 
-function stageHistoryToActivities(history: any[]): any[] {
+function stageHistoryToActivities(history: MatterStageHistory[]): {
+  id: string;
+  type: "matter";
+  title: string;
+  description: string;
+  timestamp: string;
+  entityUrl: string;
+}[] {
   return history.map((h, index) => ({
     id: `stage-${index}`,
     type: "matter" as const,
     title: `Stage changed to ${h.stage.replace(/_/g, " ")}`,
-    description: h.notes || "Stage transition",
+    description: h.notes ?? "Stage transition",
     timestamp: h.changedAt,
     entityUrl: "#",
   }));

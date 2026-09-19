@@ -9,27 +9,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDate } from "@/lib/format";
-import type { UserRole } from "@/types";
-
-export interface ReviewStage {
-  id: string;
-  stageNumber: number;
-  name: string;
-  reviewerRole: UserRole;
-  reviewerId?: string;
-  reviewerName?: string;
-  status: "pending" | "in_progress" | "completed" | "skipped" | "rework";
-  startedAt?: string;
-  completedAt?: string;
-  comments?: string;
-  action?: "approve" | "reject" | "rework" | "comment";
-  dueDate?: string;
-}
+import type { ReviewAction, ReviewStage, UserRole } from "@/types";
 
 export interface ReviewStepperProps {
   stages: ReviewStage[];
   currentStageIndex: number;
-  onAction?: (stageId: string, action: "approve" | "reject" | "rework" | "comment", comments?: string) => void;
+  onAction?: (stageId: string, action: ReviewAction, comments?: string) => void;
   onAddComment?: (stageId: string, comment: string) => void;
   showActions?: boolean;
   showHistory?: boolean;
@@ -107,7 +92,7 @@ export function ReviewStepper({
   showHistory = true,
   showComments = true,
   currentUserId,
-  currentUserRole,
+  currentUserRole: _currentUserRole,
   className,
   compact = false,
   showProgress = true,
@@ -129,13 +114,48 @@ export function ReviewStepper({
     return isCurrentUserReviewer(stage) || !stage.reviewerId;
   };
 
-  const handleAction = (stage: ReviewStage, action: "approve" | "reject" | "rework" | "comment") => {
+  const getStageId = (stage: ReviewStage): string => {
+    const id = stage.id;
+    return (id ?? String(stage.stageNumber)) as string;
+  };
+
+  const getCircleClass = (isCompleted: boolean, isCurrent: boolean, status: ReviewStage["status"]) => {
+    if (isCompleted) return "bg-green-500 text-white";
+    if (isCurrent) return "bg-primary text-white";
+    if (status === "rework") return "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400";
+    return "bg-muted text-muted-foreground";
+  };
+
+  const getCircleContent = (
+    isCompleted: boolean,
+    isCurrent: boolean,
+    config: (typeof stageStatusConfig)[keyof typeof stageStatusConfig],
+    index: number,
+  ) => {
+    if (isCompleted) return <CheckCircle className="h-5 w-5" />;
+    if (isCurrent) return <config.icon className="h-5 w-5" />;
+    return index + 1;
+  };
+
+  const getTitleClass = (isCompleted: boolean, isCurrent: boolean) => {
+    if (isCurrent) return "text-primary";
+    if (isCompleted) return "text-green-700 dark:text-green-300";
+    return "";
+  };
+
+  const getActionBadgeVariant = (action: ReviewAction) => {
+    if (action === "approve") return "default";
+    if (action === "reject") return "destructive";
+    return "outline";
+  };
+
+  const handleAction = (stage: ReviewStage, action: ReviewAction) => {
     if (!onAction) return;
     const comments =
       action === "reject" || action === "rework"
-        ? prompt(`${action.charAt(0).toUpperCase() + action.slice(1)} reason (optional):`)
+        ? (prompt(`${action.charAt(0).toUpperCase() + action.slice(1)} reason (optional):`) ?? undefined)
         : undefined;
-    onAction(stage.id, action, comments);
+    onAction(getStageId(stage), action, comments);
   };
 
   const renderStage = (stage: ReviewStage, index: number) => {
@@ -155,35 +175,17 @@ export function ReviewStepper({
 
     const circleClassName = cn(
       "flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full font-medium text-sm",
-      isCompleted
-        ? "bg-green-500 text-white"
-        : isCurrent
-          ? "bg-primary text-white"
-          : stage.status === "rework"
-            ? "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
-            : "bg-muted text-muted-foreground",
+      getCircleClass(isCompleted, isCurrent, stage.status),
     );
 
-    const titleClassName = cn(
-      "font-medium",
-      isCurrent && "text-primary",
-      isCompleted && "text-green-700 dark:text-green-300",
-    );
+    const titleClassName = cn("font-medium", getTitleClass(isCompleted, isCurrent));
 
     const badgeClassName = cn("text-xs", config.color);
 
     return (
-      <div key={stage.id} className={stageClassName}>
+      <div key={stage.id ?? `stage-${stage.stageNumber}`} className={stageClassName}>
         <div className="flex items-start gap-3">
-          <div className={circleClassName}>
-            {isCompleted ? (
-              <CheckCircle className="h-5 w-5" />
-            ) : isCurrent ? (
-              <config.icon className="h-5 w-5" />
-            ) : (
-              index + 1
-            )}
-          </div>
+          <div className={circleClassName}>{getCircleContent(isCompleted, isCurrent, config, index)}</div>
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
@@ -213,8 +215,8 @@ export function ReviewStepper({
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <User className="h-3.5 w-3.5" />
               <span>
-                {stage.reviewerName || stage.reviewerRole?.replace(/_/g, " ") || "Unassigned"}
-                {stage.reviewerRole && <span className="ml-1">({stage.reviewerRole.replace(/_/g, " ")})</span>}
+                {stage.reviewerName ?? stage.reviewerRole.replace(/_/g, " ") ?? "Unassigned"}
+                <span className="ml-1">({stage.reviewerRole.replace(/_/g, " ")})</span>
               </span>
               {stage.startedAt && (
                 <>
@@ -290,7 +292,7 @@ export function ReviewStepper({
             </div>
           )}
 
-          {(showComments || showHistory) && (
+          {(showComments === true || showHistory === true) && (
             <div className={cn("mt-4 pt-4 border-t space-y-3 w-full", compact && "mt-2 pt-2")}>
               {showComments && stage.comments && (
                 <div className="space-y-2">
@@ -298,11 +300,13 @@ export function ReviewStepper({
                   <div className="ml-4 space-y-1 text-sm text-muted-foreground">
                     <p className="whitespace-pre-wrap">{stage.comments}</p>
                   </div>
-                  {onAddComment && canAct && <AddCommentForm stageId={stage.id} onAddComment={onAddComment} />}
+                  {onAddComment && canAct && (
+                    <AddCommentForm stageId={stage.id ?? `stage-${stage.stageNumber}`} onAddComment={onAddComment} />
+                  )}
                 </div>
               )}
 
-              {showHistory && (stage.startedAt || stage.completedAt || stage.comments) && (
+              {showHistory && (stage.startedAt != null || stage.completedAt != null || stage.comments != null) && (
                 <div className="space-y-2">
                   <h5 className="font-medium text-sm">History</h5>
                   <div className="ml-4 space-y-1 text-sm text-muted-foreground">
@@ -320,15 +324,7 @@ export function ReviewStepper({
                     )}
                     {stage.action && (
                       <div className="flex items-center gap-2">
-                        <Badge
-                          variant={
-                            stage.action === "approve"
-                              ? "default"
-                              : stage.action === "reject"
-                                ? "destructive"
-                                : "outline"
-                          }
-                        >
+                        <Badge variant={getActionBadgeVariant(stage.action)}>
                           {stage.action.charAt(0).toUpperCase() + stage.action.slice(1)}
                         </Badge>
                         {stage.comments && <span className="ml-2 truncate max-w-xs">{stage.comments}</span>}
