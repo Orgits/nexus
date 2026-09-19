@@ -49,12 +49,14 @@ export {
   mockConversations,
 } from "./communications";
 export {
+  getAllDocumentRequests,
   getComplianceCycleById,
   getComplianceCyclesByClient,
   getComplianceCyclesByServiceType,
   getComplianceCyclesByStatus,
   getComplianceCyclesByUser,
   getComplianceSummary,
+  getDocumentRequestById,
   getDocumentRequestsByComplianceCycle,
   getOverdueComplianceCycles,
   mockComplianceCycles,

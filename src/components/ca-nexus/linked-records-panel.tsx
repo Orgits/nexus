@@ -143,7 +143,7 @@ interface LinkedRecordItemComponentProps {
     icon?: React.ReactNode;
     onClick?: () => void;
   };
-  onClick?: (item: typeof item) => void;
+  onClick?: (item: LinkedRecordItem) => void;
   compact?: boolean;
 }
 
@@ -190,7 +190,7 @@ export function createClientLink(client: Client): {
   return {
     id: client.id,
     label: client.displayName || client.name,
-    subtitle: client.category?.replace(/_/g, " "),
+    subtitle: client.category.replace(/_/g, " "),
     href: `/dashboard/clients/${client.id}`,
     icon: <Users className="h-3.5 w-3.5" />,
   };
@@ -219,6 +219,12 @@ export function createMatterLink(
   };
 }
 
+function getTaskBadgeVariant(status: TaskStatus): "default" | "secondary" | "destructive" | "outline" {
+  if (status === "completed") return "default";
+  if (status === "in_review" || status === "rework") return "destructive";
+  return "secondary";
+}
+
 export function createTaskLink(task: Task): {
   id: string;
   label: string;
@@ -234,7 +240,7 @@ export function createTaskLink(task: Task): {
     subtitle: `Due: ${task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "—"}`,
     href: `/dashboard/tasks/${task.id}`,
     badge: task.status.replace(/_/g, " "),
-    badgeVariant: task.status === "overdue" ? "destructive" : task.status === "completed" ? "default" : "secondary",
+    badgeVariant: getTaskBadgeVariant(task.status),
     icon: <CheckSquare className="h-3.5 w-3.5" />,
   };
 }
@@ -259,6 +265,12 @@ export function createComplianceCycleLink(cycle: ComplianceCycle): {
   };
 }
 
+function getDocumentBadgeVariant(ocrStatus: OCRStatus): "default" | "secondary" | "destructive" | "outline" {
+  if (ocrStatus === "completed") return "default";
+  if (ocrStatus === "failed") return "destructive";
+  return "secondary";
+}
+
 export function createDocumentLink(doc: Document): {
   id: string;
   label: string;
@@ -274,7 +286,7 @@ export function createDocumentLink(doc: Document): {
     subtitle: `${doc.category.replace(/_/g, " ")} • ${doc.fileSize > 0 ? formatFileSize(doc.fileSize) : "—"}`,
     href: `/dashboard/documents/${doc.id}`,
     badge: doc.ocrStatus.replace(/_/g, " "),
-    badgeVariant: doc.ocrStatus === "completed" ? "default" : doc.ocrStatus === "failed" ? "destructive" : "secondary",
+    badgeVariant: getDocumentBadgeVariant(doc.ocrStatus),
     icon: <FileText className="h-3.5 w-3.5" />,
   };
 }
@@ -298,7 +310,7 @@ export function createCommunicationLink(comm: Communication): {
 
   return {
     id: comm.id,
-    label: comm.subject || comm.content.slice(0, 50),
+    label: comm.subject ?? comm.content.slice(0, 50),
     subtitle: `${comm.channel.toUpperCase()} • ${comm.direction} • ${comm.sentAt ? new Date(comm.sentAt).toLocaleDateString() : "—"}`,
     href: `/dashboard/communications/${comm.id}`,
     badge: comm.status,
@@ -327,6 +339,12 @@ export function createConversationLink(conv: Conversation): {
   };
 }
 
+function getReviewBadgeVariant(status: ReviewStatus): "default" | "secondary" | "destructive" | "outline" {
+  if (status === "completed") return "default";
+  if (status === "in_progress") return "secondary";
+  return "outline";
+}
+
 export function createReviewLink(review: Review): {
   id: string;
   label: string;
@@ -342,9 +360,15 @@ export function createReviewLink(review: Review): {
     subtitle: `${review.reviewType.replace(/_/g, " ")} • Stage ${review.currentStage}/${review.stages.length}`,
     href: `/dashboard/reviews/${review.id}`,
     badge: review.status,
-    badgeVariant: review.status === "completed" ? "default" : review.status === "in_progress" ? "secondary" : "outline",
+    badgeVariant: getReviewBadgeVariant(review.status),
     icon: <Shield className="h-3.5 w-3.5" />,
   };
+}
+
+function getInvoiceBadgeVariant(paymentStatus: PaymentStatus): "default" | "secondary" | "destructive" | "outline" {
+  if (paymentStatus === "overdue") return "destructive";
+  if (paymentStatus === "paid") return "default";
+  return "secondary";
 }
 
 export function createInvoiceLink(invoice: Invoice): {
@@ -362,8 +386,7 @@ export function createInvoiceLink(invoice: Invoice): {
     subtitle: `${invoice.clientId} • ${formatCurrency(invoice.totalAmount)}`,
     href: `/dashboard/invoices/${invoice.id}`,
     badge: invoice.status,
-    badgeVariant:
-      invoice.paymentStatus === "overdue" ? "destructive" : invoice.paymentStatus === "paid" ? "default" : "secondary",
+    badgeVariant: getInvoiceBadgeVariant(invoice.paymentStatus),
     icon: <Receipt className="h-3.5 w-3.5" />,
   };
 }

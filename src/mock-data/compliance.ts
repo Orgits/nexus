@@ -52,21 +52,38 @@ const mayPeriod = {
 
 const createMissingDocs = (types: { type: string; mandatory: boolean; received?: boolean }[]): MissingDocument[] =>
   types.map((t, i) => ({
-    documentType: t.type as any,
+    documentType: t.type as DocumentType,
     description: `Required for filing`,
     isMandatory: t.mandatory,
     requestedAt: t.received ? "2024-05-01T10:00:00Z" : "2024-05-15T10:00:00Z",
     receivedAt: t.received ? "2024-06-10T10:00:00Z" : undefined,
-    documentId: t.received ? (`doc-${i}` as any) : undefined,
+    documentId: t.received ? `doc-${i}` : undefined,
   }));
+
+const getReviewStageName = (index: number): string => {
+  switch (index) {
+    case 0:
+      return "Senior Review";
+    case 1:
+      return "Manager Review";
+    default:
+      return "Partner Review";
+  }
+};
+
+const getReviewStageStatus = (index: number, completed: number): ReviewStatus => {
+  if (index < completed) return "completed";
+  if (index === completed) return "in_progress";
+  return "pending";
+};
 
 const createReviewStages = (count: number, completed: number): ReviewStage[] =>
   Array.from({ length: count }, (_, i) => ({
     stageNumber: i + 1,
-    name: i === 0 ? "Senior Review" : i === 1 ? "Manager Review" : "Partner Review",
-    reviewerId: [IDS.USERS.SENIOR_1, IDS.USERS.MANAGER_1, IDS.USERS.PARTNER_1][i] as any,
-    reviewerRole: ["senior_associate", "manager", "partner"][i] as any,
-    status: i < completed ? "completed" : i === completed ? "in_progress" : ("pending" as ReviewStatus),
+    name: getReviewStageName(i),
+    reviewerId: [IDS.USERS.SENIOR_1, IDS.USERS.MANAGER_1, IDS.USERS.PARTNER_1][i],
+    reviewerRole: ["senior_associate", "manager", "partner"][i] as UserRole,
+    status: getReviewStageStatus(i, completed),
     startedAt: i <= completed ? "2024-07-01T10:00:00Z" : undefined,
     completedAt: i < completed ? "2024-07-05T10:00:00Z" : undefined,
     action: i < completed ? "approve" : undefined,
@@ -760,4 +777,27 @@ export const getComplianceSummary = () => {
 export const getDocumentRequestsByComplianceCycle = (complianceCycleId: string): DocumentRequest[] => {
   const cycle = mockComplianceCycles.find((c) => c.id === complianceCycleId);
   return cycle?.documentRequests || [];
+};
+
+export const getDocumentRequestById = (
+  requestId: string,
+): (DocumentRequest & { complianceCycleId: string; complianceCycleName: string }) | undefined => {
+  for (const cycle of mockComplianceCycles) {
+    const request = cycle.documentRequests.find((r) => r.id === requestId);
+    if (request) return { ...request, complianceCycleId: cycle.id, complianceCycleName: cycle.serviceName };
+  }
+  return undefined;
+};
+
+export const getAllDocumentRequests = (): (DocumentRequest & {
+  complianceCycleId: string;
+  complianceCycleName: string;
+})[] => {
+  const result: (DocumentRequest & { complianceCycleId: string; complianceCycleName: string })[] = [];
+  for (const cycle of mockComplianceCycles) {
+    for (const request of cycle.documentRequests) {
+      result.push({ ...request, complianceCycleId: cycle.id, complianceCycleName: cycle.serviceName });
+    }
+  }
+  return result;
 };

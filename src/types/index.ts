@@ -694,18 +694,21 @@ export type CampaignStatus =
   | "failed";
 
 export interface ReviewStage {
+  id?: UUID;
   stageNumber: number;
   name: string;
   reviewerId: UUID;
   reviewerRole: UserRole;
+  reviewerName?: string;
   status: ReviewStatus;
   startedAt?: ISODateTimeString;
   completedAt?: ISODateTimeString;
   comments?: string;
   action?: ReviewAction;
+  dueDate?: ISODateString;
 }
 
-export type ReviewStatus = "pending" | "in_progress" | "completed" | "skipped";
+export type ReviewStatus = "pending" | "in_progress" | "completed" | "skipped" | "rework";
 
 export type ReviewAction = "approve" | "reject" | "rework" | "comment";
 

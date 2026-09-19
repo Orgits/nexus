@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 
 import { useRouter, useSearchParams } from "next/navigation";
 
+import type { ColumnDef } from "@tanstack/react-table";
 import { cn } from "cn";
 import { AlertTriangle, CheckCircle, Clock, Download, Edit, FileText, Plus, Upload } from "lucide-react";
 
@@ -16,12 +17,13 @@ import { DocumentRequestStatusBadge } from "@/components/ca-nexus/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { DataTableFeatures } from "@/lib/data-table-features";
 import { formatDateTime } from "@/lib/format";
 import { getClientById, mockClients } from "@/mock-data/clients";
 import { getDocumentRequestsByComplianceCycle, mockComplianceCycles } from "@/mock-data/compliance";
 import { getMatterById, mockMatters } from "@/mock-data/matters";
 import { getUserById, mockUsers } from "@/mock-data/users";
-import type { DocumentRequest } from "@/types";
+import type { ComplianceCycle, DocumentRequest } from "@/types";
 
 const filterConfigs: FilterConfig[] = [
   {
@@ -80,7 +82,7 @@ export function DocumentRequestsList() {
   });
 
   const allRequests = useMemo(() => {
-    const result: any[] = [];
+    const result: (DocumentRequest & { complianceCycle: ComplianceCycle })[] = [];
     mockComplianceCycles.forEach((cycle) => {
       const requests = getDocumentRequestsByComplianceCycle(cycle.id);
       requests.forEach((req) => {
@@ -120,14 +122,14 @@ export function DocumentRequestsList() {
       result = result.filter(
         (r) =>
           r.id.toLowerCase().includes(q) ||
-          r.items.some((item: any) => item.documentType.toLowerCase().includes(q)) ||
+          r.items.some((item) => item.documentType.toLowerCase().includes(q)) ||
           r.complianceCycle?.serviceName.toLowerCase().includes(q),
       );
     }
 
     for (const [key, value] of Object.entries(filters)) {
       if (!value) continue;
-      result = result.filter((r) => (r as unknown as Record<string, unknown>)[key] === value);
+      result = result.filter((r) => r[key as keyof typeof r] === value);
     }
 
     result.sort((a, b) => {
@@ -162,22 +164,22 @@ export function DocumentRequestsList() {
     return { total, draft, sent, partially, received, overdue };
   }, [filtered]);
 
-  const requestColumns = [
+  const requestColumns: ColumnDef<DataTableFeatures, DocumentRequest & { complianceCycle: ComplianceCycle }>[] = [
     {
       accessorKey: "id",
       header: "Request ID",
       enableHiding: false,
-      cell: ({ row }: { row: { original: DocumentRequest & { complianceCycle: any } } }) => (
+      cell: ({ row }: { row: { original: DocumentRequest & { complianceCycle: ComplianceCycle } } }) => (
         <div>
           <p className="font-medium text-sm">{row.original.id}</p>
-          <p className="text-muted-foreground text-xs">{row.original.complianceCycle?.serviceName || "Unknown"}</p>
+          <p className="text-muted-foreground text-xs">{row.original.complianceCycle.serviceName}</p>
         </div>
       ),
     },
     {
       accessorKey: "clientId",
       header: "Client",
-      cell: ({ row }: { row: { original: DocumentRequest & { complianceCycle: any } } }) => {
+      cell: ({ row }: { row: { original: DocumentRequest & { complianceCycle: ComplianceCycle } } }) => {
         const client = getClientById(row.original.clientId);
         return client ? (
           <ClientLink client={client} showStatus={true} />
@@ -189,7 +191,7 @@ export function DocumentRequestsList() {
     {
       accessorKey: "matterId",
       header: "Matter",
-      cell: ({ row }: { row: { original: DocumentRequest & { complianceCycle: any } } }) => {
+      cell: ({ row }: { row: { original: DocumentRequest & { complianceCycle: ComplianceCycle } } }) => {
         if (!row.original.matterId) return <span className="text-muted-foreground text-sm">—</span>;
         const matter = getMatterById(row.original.matterId);
         return matter ? (
@@ -202,17 +204,17 @@ export function DocumentRequestsList() {
     {
       accessorKey: "status",
       header: "Status",
-      cell: ({ row }: { row: { original: DocumentRequest & { complianceCycle: any } } }) => (
+      cell: ({ row }: { row: { original: DocumentRequest & { complianceCycle: ComplianceCycle } } }) => (
         <DocumentRequestStatusBadge status={row.original.status} />
       ),
     },
     {
       accessorKey: "items",
       header: "Items",
-      cell: ({ row }: { row: { original: DocumentRequest & { complianceCycle: any } } }) => (
+      cell: ({ row }: { row: { original: DocumentRequest & { complianceCycle: ComplianceCycle } } }) => (
         <div className="max-h-24 space-y-1 overflow-y-auto">
-          {row.original.items.map((item: any, i: number) => (
-            <div key={i} className="flex items-center gap-2 text-sm">
+          {row.original.items.map((item) => (
+            <div key={item.documentType} className="flex items-center gap-2 text-sm">
               <span className={cn("text-xs", item.isReceived ? "text-green-600" : "text-red-600")}>
                 {item.isReceived ? "✓" : "✗"}
               </span>
@@ -230,21 +232,21 @@ export function DocumentRequestsList() {
     {
       accessorKey: "sentAt",
       header: "Sent At",
-      cell: ({ row }: { row: { original: DocumentRequest & { complianceCycle: any } } }) => (
+      cell: ({ row }: { row: { original: DocumentRequest & { complianceCycle: ComplianceCycle } } }) => (
         <span className="text-sm">{row.original.sentAt ? formatDateTime(row.original.sentAt) : "Not sent"}</span>
       ),
     },
     {
       accessorKey: "reminderCount",
       header: "Reminders",
-      cell: ({ row }: { row: { original: DocumentRequest & { complianceCycle: any } } }) => (
+      cell: ({ row }: { row: { original: DocumentRequest & { complianceCycle: ComplianceCycle } } }) => (
         <span className="font-medium text-sm">{row.original.reminderCount}</span>
       ),
     },
     {
       accessorKey: "lastReminderAt",
       header: "Last Reminder",
-      cell: ({ row }: { row: { original: DocumentRequest & { complianceCycle: any } } }) => (
+      cell: ({ row }: { row: { original: DocumentRequest & { complianceCycle: ComplianceCycle } } }) => (
         <span className="text-sm">
           {row.original.lastReminderAt ? formatDateTime(row.original.lastReminderAt) : "—"}
         </span>
@@ -253,9 +255,9 @@ export function DocumentRequestsList() {
     {
       accessorKey: "requestedById",
       header: "Requested By",
-      cell: ({ row }: { row: { original: DocumentRequest & { complianceCycle: any } } }) => {
+      cell: ({ row }: { row: { original: DocumentRequest & { complianceCycle: ComplianceCycle } } }) => {
         const user = getUserById(row.original.requestedById);
-        return <span className="text-sm">{user?.fullName || row.original.requestedById}</span>;
+        return <span className="text-sm">{user?.fullName ?? row.original.requestedById}</span>;
       },
     },
   ];
@@ -322,9 +324,9 @@ export function DocumentRequestsList() {
       />
 
       {filtered.length > 0 ? (
-        <DataTable<any>
+        <DataTable<DocumentRequest & { complianceCycle: ComplianceCycle }>
           data={filtered}
-          columns={requestColumns as any}
+          columns={requestColumns}
           getRowId={(row) => row.id}
           enableRowSelection
           pageSize={15}
@@ -332,7 +334,7 @@ export function DocumentRequestsList() {
           rowActions={[
             {
               label: "View Details",
-              action: (row) => alert(`View request ${row.id}`),
+              action: (row) => router.push(`/dashboard/documents/requests/${row.id}`),
             },
             {
               label: "Send Reminder",

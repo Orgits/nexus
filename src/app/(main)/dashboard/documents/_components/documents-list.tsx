@@ -4,9 +4,11 @@ import { useMemo, useState } from "react";
 
 import { useRouter, useSearchParams } from "next/navigation";
 
+import type { ColumnDef } from "@tanstack/react-table";
 import { AlertTriangle, Building2, Clock, Download, Eye, FileText, Shield, Upload, X } from "lucide-react";
 
 import { DataTable } from "@/components/ca-nexus/data-table";
+import { DocumentUploadDialog } from "@/components/ca-nexus/document-upload-dialog";
 import { EmptyDocuments } from "@/components/ca-nexus/empty-state";
 import { FilterBar, type FilterConfig } from "@/components/ca-nexus/filter-bar";
 import { ClientLink, MatterLink } from "@/components/ca-nexus/object-link";
@@ -14,6 +16,7 @@ import { PageHeader } from "@/components/ca-nexus/page-blocks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { DataTableFeatures } from "@/lib/data-table-features";
 import { formatDateTime, formatFileSize } from "@/lib/format";
 import { getClientById, mockClients } from "@/mock-data/clients";
 import { mockDocuments } from "@/mock-data/documents";
@@ -150,6 +153,7 @@ export function DocumentsList() {
     key: "createdAt",
     direction: "desc",
   });
+  const [showUploadDialog, setShowUploadDialog] = useState(false);
 
   const filtered = useMemo(() => {
     let result = [...mockDocuments];
@@ -230,7 +234,55 @@ export function DocumentsList() {
     return { total, confidential, ocrPending, ocrCompleted, kyc, tax, financial, totalSize };
   }, [filtered]);
 
-  const documentColumns = [
+  const getOcrBadgeVariant = (status: string): "default" | "secondary" | "destructive" | "outline" => {
+    switch (status) {
+      case "completed":
+        return "default";
+      case "processing":
+        return "secondary";
+      case "failed":
+        return "destructive";
+      default:
+        return "outline";
+    }
+  };
+
+  const getOcrBadgeIcon = (status: string) => {
+    switch (status) {
+      case "completed":
+        return <Eye className="mr-1 h-3 w-3" />;
+      case "pending":
+        return <AlertTriangle className="mr-1 h-3 w-3" />;
+      case "processing":
+        return <Clock className="mr-1 h-3 w-3 animate-spin" />;
+      default:
+        return <X className="mr-1 h-3 w-3" />;
+    }
+  };
+
+  const getVirusScanBadgeVariant = (status: string): "default" | "destructive" | "outline" => {
+    switch (status) {
+      case "clean":
+        return "default";
+      case "infected":
+        return "destructive";
+      default:
+        return "outline";
+    }
+  };
+
+  const getVirusScanShieldClass = (status: string): string => {
+    switch (status) {
+      case "clean":
+        return "mr-1 h-3 w-3 text-green-600";
+      case "infected":
+        return "mr-1 h-3 w-3 text-red-600";
+      default:
+        return "mr-1 h-3 w-3";
+    }
+  };
+
+  const documentColumns: ColumnDef<DataTableFeatures, Document>[] = [
     {
       accessorKey: "documentNumber",
       header: "Document #",
@@ -312,26 +364,8 @@ export function DocumentsList() {
       accessorKey: "ocrStatus",
       header: "OCR",
       cell: ({ row }: { row: { original: Document } }) => (
-        <Badge
-          variant={
-            row.original.ocrStatus === "completed"
-              ? "default"
-              : row.original.ocrStatus === "processing"
-                ? "secondary"
-                : row.original.ocrStatus === "failed"
-                  ? "destructive"
-                  : "outline"
-          }
-        >
-          {row.original.ocrStatus === "completed" ? (
-            <Eye className="mr-1 h-3 w-3" />
-          ) : row.original.ocrStatus === "pending" ? (
-            <AlertTriangle className="mr-1 h-3 w-3" />
-          ) : row.original.ocrStatus === "processing" ? (
-            <Clock className="mr-1 h-3 w-3 animate-spin" />
-          ) : (
-            <X className="mr-1 h-3 w-3" />
-          )}
+        <Badge variant={getOcrBadgeVariant(row.original.ocrStatus)}>
+          {getOcrBadgeIcon(row.original.ocrStatus)}
           {row.original.ocrStatus.replace(/_/g, " ")}
         </Badge>
       ),
@@ -340,18 +374,8 @@ export function DocumentsList() {
       accessorKey: "virusScanStatus",
       header: "Virus Scan",
       cell: ({ row }: { row: { original: Document } }) => (
-        <Badge
-          variant={
-            row.original.virusScanStatus === "clean"
-              ? "default"
-              : row.original.virusScanStatus === "infected"
-                ? "destructive"
-                : "outline"
-          }
-        >
-          <Shield
-            className={`mr-1 h-3 w-3 ${row.original.virusScanStatus === "clean" ? "text-green-600" : row.original.virusScanStatus === "infected" ? "text-red-600" : ""}`}
-          />
+        <Badge variant={getVirusScanBadgeVariant(row.original.virusScanStatus)}>
+          <Shield className={getVirusScanShieldClass(row.original.virusScanStatus)} />
           {row.original.virusScanStatus}
         </Badge>
       ),
@@ -402,10 +426,20 @@ export function DocumentsList() {
               <Download className="mr-2 h-4 w-4" />
               Export
             </Button>
-            <Button size="sm" onClick={() => alert("Upload new document")}>
+            <Button size="sm" onClick={() => setShowUploadDialog(true)}>
               <Upload className="mr-2 h-4 w-4" />
               Upload
             </Button>
+            {showUploadDialog && (
+              <DocumentUploadDialog
+                open={showUploadDialog}
+                onOpenChange={setShowUploadDialog}
+                onUploadComplete={() => {
+                  // In a real app, this would refresh the document list
+                  console.log("Documents uploaded");
+                }}
+              />
+            )}
           </div>
         }
       />
@@ -448,7 +482,7 @@ export function DocumentsList() {
       {filtered.length > 0 ? (
         <DataTable<Document>
           data={filtered}
-          columns={documentColumns as any}
+          columns={documentColumns}
           getRowId={(row) => row.id}
           enableRowSelection
           pageSize={20}

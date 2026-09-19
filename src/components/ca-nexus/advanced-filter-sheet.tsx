@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { cn } from "cn";
 import { ChevronDown, Filter as FilterIcon, Loader2, X } from "lucide-react";
 
+import type { FilterConfig } from "@/components/ca-nexus/filter-bar";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -12,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import type { FilterConfig, FilterParams } from "@/lib/preferences/preferences-config";
+import type { FilterParams } from "@/types";
 
 function CheckIcon({ className }: { className?: string }) {
   return (
@@ -226,10 +227,10 @@ function FilterField({
           <Label htmlFor={`filter-${filter.key}`}>{filter.label}</Label>
           <Input
             id={`filter-${filter.key}`}
-            placeholder={filter.placeholder || filter.label}
+            placeholder={filter.placeholder ?? filter.label}
             value={(value as string) || ""}
             onChange={(e) => onChange(filter.key, e.target.value)}
-            className={isActive && "border-primary/20 bg-primary/5"}
+            className={isActive ? "border-primary/20 bg-primary/5" : ""}
           />
         </div>
       );
@@ -238,9 +239,9 @@ function FilterField({
       return (
         <div className="space-y-1.5">
           <Label htmlFor={`filter-${filter.key}`}>{filter.label}</Label>
-          <Select value={(value as string) || ""} onValueChange={(v) => onChange(filter.key, v || undefined)}>
-            <SelectTrigger className={isActive && "border-primary/20 bg-primary/5"}>
-              <SelectValue placeholder={filter.placeholder || filter.label} />
+          <Select value={(value as string) || ""} onValueChange={(v) => onChange(filter.key, v ?? undefined)}>
+            <SelectTrigger className={isActive ? "border-primary/20 bg-primary/5" : ""}>
+              <SelectValue placeholder={filter.placeholder ?? filter.label} />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="">All</SelectItem>
@@ -259,8 +260,8 @@ function FilterField({
       const options = filter.options ?? [];
       const displayValue =
         selectedValues.length > 0
-          ? selectedValues.map((v) => options.find((o) => o.value === v)?.label || v).join(", ")
-          : filter.placeholder || filter.label;
+          ? selectedValues.map((v) => options.find((o) => o.value === v)?.label ?? v).join(", ")
+          : (filter.placeholder ?? filter.label);
 
       return (
         <div className="space-y-1.5">
@@ -273,8 +274,8 @@ function FilterField({
               <SelectTrigger
                 className={cn(
                   "w-full justify-start text-left",
-                  isActive && "border-primary/20 bg-primary/5",
-                  selectedValues.length === 0 && "text-muted-foreground",
+                  isActive ? "border-primary/20 bg-primary/5" : "",
+                  selectedValues.length === 0 ? "text-muted-foreground" : "",
                 )}
               >
                 {displayValue}
@@ -330,10 +331,10 @@ function FilterField({
           <Input
             id={`filter-${filter.key}`}
             type="date"
-            placeholder={filter.placeholder || filter.label}
+            placeholder={filter.placeholder ?? filter.label}
             value={(value as string) || ""}
-            onChange={(e) => onChange(filter.key, e.target.value || undefined)}
-            className={isActive && "border-primary/20 bg-primary/5"}
+            onChange={(e) => onChange(filter.key, e.target.value ?? undefined)}
+            className={isActive ? "border-primary/20 bg-primary/5" : ""}
           />
         </div>
       );
@@ -375,10 +376,10 @@ function FilterField({
           <Input
             id={`filter-${filter.key}`}
             type="number"
-            placeholder={filter.placeholder || filter.label}
+            placeholder={filter.placeholder ?? filter.label}
             value={(value as number) || ""}
             onChange={(e) => onChange(filter.key, e.target.value ? Number(e.target.value) : undefined)}
-            className={isActive && "border-primary/20 bg-primary/5"}
+            className={isActive ? "border-primary/20 bg-primary/5" : ""}
           />
         </div>
       );
@@ -387,9 +388,9 @@ function FilterField({
       return (
         <div className="space-y-1.5">
           <Label htmlFor={`filter-${filter.key}`}>{filter.label}</Label>
-          <Select value={(value as string) || ""} onValueChange={(v) => onChange(filter.key, v || undefined)}>
-            <SelectTrigger className={isActive && "border-primary/20 bg-primary/5"}>
-              <SelectValue placeholder={filter.placeholder || filter.label} />
+          <Select value={(value as string) || ""} onValueChange={(v) => onChange(filter.key, v ?? undefined)}>
+            <SelectTrigger className={isActive ? "border-primary/20 bg-primary/5" : ""}>
+              <SelectValue placeholder={filter.placeholder ?? filter.label} />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="">All</SelectItem>

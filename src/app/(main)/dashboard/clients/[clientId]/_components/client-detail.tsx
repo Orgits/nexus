@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { useRouter } from "next/navigation";
 
+import type { ColumnDef } from "@tanstack/react-table";
 import { cn } from "cn";
 import {
   Activity,
@@ -37,6 +38,7 @@ import {
   EmptyTasks,
 } from "@/components/ca-nexus/empty-state";
 import { FilterBar, type FilterConfig } from "@/components/ca-nexus/filter-bar";
+import { Breadcrumb } from "@/components/ca-nexus/object-link";
 import { KeyValueList, SectionCard, StatTile } from "@/components/ca-nexus/page-blocks";
 import { ClientRecordHeader } from "@/components/ca-nexus/record-header";
 import {
@@ -48,6 +50,7 @@ import {
 } from "@/components/ca-nexus/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { DataTableFeatures } from "@/lib/data-table-features";
 import { formatDate } from "@/lib/format";
 import { clientCategoryLabel, clientTypeLabel, formatCurrency, serviceTypeLabel } from "@/lib/labels";
 import { getClientById, getContactsByClient } from "@/mock-data/clients";
@@ -143,6 +146,9 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
 
   return (
     <div className="space-y-6">
+      <Breadcrumb
+        items={[{ label: "Clients", href: "/dashboard/clients" }, { label: client.displayName || client.name }]}
+      />
       <ClientRecordHeader client={client} />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -269,13 +275,13 @@ function ClientOverviewTab({
         <SectionCard title="Client Information">
           <KeyValueList
             items={[
-              { label: "Legal Name", value: client.legalName || "—" },
+              { label: "Legal Name", value: client.legalName ?? "—" },
               { label: "Entity Type", value: clientTypeLabel(client.type) },
               { label: "Category", value: clientCategoryLabel(client.category) },
               { label: "Status", value: <ClientStatusBadge status={client.status} /> },
-              { label: "PAN", value: client.identifiers.pan || "—" },
-              { label: "GSTIN", value: client.identifiers.gstin || "—" },
-              { label: "CIN", value: client.identifiers.cin || "—" },
+              { label: "PAN", value: client.identifiers.pan ?? "—" },
+              { label: "GSTIN", value: client.identifiers.gstin ?? "—" },
+              { label: "CIN", value: client.identifiers.cin ?? "—" },
               { label: "Financial Year Start", value: `Month ${client.complianceProfile.financialYearStart}` },
             ]}
           />
@@ -296,11 +302,11 @@ function ClientOverviewTab({
               },
               {
                 label: "Primary Contact",
-                value: client.primaryContactId
-                  ? contacts.find((c) => c.id === client.primaryContactId)
-                    ? `${contacts.find((c) => c.id === client.primaryContactId)?.firstName} ${contacts.find((c) => c.id === client.primaryContactId)?.lastName}`
-                    : "—"
-                  : "—",
+                value: (() => {
+                  if (!client.primaryContactId) return "—";
+                  const contact = contacts.find((c) => c.id === client.primaryContactId);
+                  return contact ? `${contact.firstName} ${contact.lastName}` : "—";
+                })(),
               },
               { label: "Portal Access", value: client.portalAccessEnabled ? "Enabled" : "Disabled" },
             ]}
@@ -352,7 +358,7 @@ function ClientOverviewTab({
             ...communications.slice(0, 2).map((c) => ({
               id: `comm-${c.id}`,
               type: "communication" as const,
-              title: c.subject || c.content.slice(0, 60),
+              title: c.subject ?? c.content.slice(0, 60),
               description: `Channel: ${c.channel} • ${c.direction}`,
               timestamp: c.sentAt || c.createdAt,
               entityUrl: `/dashboard/communications/${c.id}`,
@@ -433,7 +439,7 @@ function ClientMattersTab({ matters, onMatterClick }: { matters: Matter[]; onMat
     return true;
   });
 
-  const matterColumns = [
+  const matterColumns: ColumnDef<DataTableFeatures, Matter>[] = [
     {
       accessorKey: "name",
       header: "Matter",
@@ -495,7 +501,7 @@ function ClientMattersTab({ matters, onMatterClick }: { matters: Matter[]; onMat
       header: "Assignee",
       cell: ({ row }: { row: { original: Matter } }) => {
         const user = getUserById(row.original.assignedUserId);
-        return <span className="text-sm">{user?.fullName || row.original.assignedUserId}</span>;
+        return <span className="text-sm">{user?.fullName ?? row.original.assignedUserId}</span>;
       },
     },
   ];
@@ -517,7 +523,7 @@ function ClientMattersTab({ matters, onMatterClick }: { matters: Matter[]; onMat
       {filteredMatters.length > 0 ? (
         <DataTable<Matter>
           data={filteredMatters}
-          columns={matterColumns as any}
+          columns={matterColumns}
           getRowId={(row) => row.id}
           pageSize={10}
           emptyMessage="No matters match your search or filters"
@@ -602,7 +608,7 @@ function ClientComplianceTab({
                     </div>
                   ),
                 },
-              ] as any
+              ] as ColumnDef<DataTableFeatures, Matter>[]
             }
             getRowId={(row) => row.id}
             pageSize={10}
@@ -621,15 +627,7 @@ function ClientComplianceTab({
   );
 }
 
-function ClientTasksTab({
-  tasks,
-  onTaskClick,
-  router,
-}: {
-  tasks: Task[];
-  onTaskClick: (task: Task) => void;
-  router: ReturnType<typeof useRouter>;
-}) {
+function ClientTasksTab({ tasks, onTaskClick }: { tasks: Task[]; onTaskClick: (task: Task) => void }) {
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, unknown>>({});
 
@@ -745,7 +743,7 @@ function ClientTasksTab({
                   </div>
                 ),
               },
-            ] as any
+            ] as ColumnDef<DataTableFeatures, Task>[]
           }
           getRowId={(row) => row.id}
           pageSize={10}
@@ -809,7 +807,7 @@ function ClientDocumentsTab({ documents, router }: { documents: Document[]; rout
               <span className="text-sm">{formatDate(row.original.createdAt)}</span>
             ),
           },
-        ] as any
+        ] as ColumnDef<DataTableFeatures, Document>[]
       }
       getRowId={(row) => row.id}
       pageSize={10}
@@ -843,7 +841,7 @@ function ClientCommunicationsTab({
             accessorKey: "subject",
             header: "Subject",
             cell: ({ row }: { row: { original: Communication } }) => (
-              <p className="font-medium">{row.original.subject || row.original.content.slice(0, 60)}</p>
+              <p className="font-medium">{row.original.subject ?? row.original.content.slice(0, 60)}</p>
             ),
           },
           {
@@ -872,7 +870,7 @@ function ClientCommunicationsTab({
               <span className="text-sm">{row.original.sentAt ? formatDate(row.original.sentAt) : "—"}</span>
             ),
           },
-        ] as any
+        ] as ColumnDef<DataTableFeatures, Communication>[]
       }
       getRowId={(row) => row.id}
       pageSize={10}
@@ -941,7 +939,7 @@ function ClientConversationsTab({
                 <span className="text-muted-foreground">0</span>
               ),
           },
-        ] as any
+        ] as ColumnDef<DataTableFeatures, Conversation>[]
       }
       getRowId={(row) => row.id}
       pageSize={10}
@@ -982,7 +980,7 @@ function ClientBillingTab({
         />
         <StatTile
           label="Payment Terms"
-          value={`${client.financialProfile?.paymentTerms || 30} days`}
+          value={`${client.financialProfile?.paymentTerms ?? 30} days`}
           icon={<Calendar className="h-5 w-5" />}
         />
       </SectionCard>
@@ -1044,7 +1042,7 @@ function ClientBillingTab({
                     </span>
                   ),
                 },
-              ] as any
+              ] as ColumnDef<DataTableFeatures, Invoice>[]
             }
             getRowId={(row) => row.id}
             pageSize={10}
@@ -1079,7 +1077,7 @@ function ClientProfileTab({
           items={[
             { label: "Client Name", value: client.name },
             { label: "Display Name", value: client.displayName },
-            { label: "Legal Name", value: client.legalName || "—" },
+            { label: "Legal Name", value: client.legalName ?? "—" },
             { label: "Entity Type", value: clientTypeLabel(client.type) },
             { label: "Category", value: clientCategoryLabel(client.category) },
             { label: "Status", value: <ClientStatusBadge status={client.status} /> },
@@ -1092,13 +1090,13 @@ function ClientProfileTab({
       <SectionCard title="Identifiers">
         <KeyValueList
           items={[
-            { label: "PAN", value: client.identifiers.pan || "—" },
-            { label: "TAN", value: client.identifiers.tan || "—" },
-            { label: "GSTIN", value: client.identifiers.gstin || "—" },
-            { label: "CIN", value: client.identifiers.cin || "—" },
-            { label: "DIN(s)", value: client.identifiers.din?.join(", ") || "—" },
-            { label: "Aadhaar", value: client.identifiers.aadhaar || "—" },
-            { label: "IEC", value: client.identifiers.iec || "—" },
+            { label: "PAN", value: client.identifiers.pan ?? "—" },
+            { label: "TAN", value: client.identifiers.tan ?? "—" },
+            { label: "GSTIN", value: client.identifiers.gstin ?? "—" },
+            { label: "CIN", value: client.identifiers.cin ?? "—" },
+            { label: "DIN(s)", value: client.identifiers.din?.join(", ") ?? "—" },
+            { label: "Aadhaar", value: client.identifiers.aadhaar ?? "—" },
+            { label: "IEC", value: client.identifiers.iec ?? "—" },
           ]}
         />
       </SectionCard>
@@ -1107,7 +1105,7 @@ function ClientProfileTab({
         <KeyValueList
           items={[
             { label: "Line 1", value: client.address.line1 },
-            { label: "Line 2", value: client.address.line2 || "—" },
+            { label: "Line 2", value: client.address.line2 ?? "—" },
             { label: "City", value: client.address.city },
             { label: "State", value: client.address.state },
             { label: "Postal Code", value: client.address.postalCode },
@@ -1119,8 +1117,8 @@ function ClientProfileTab({
       <SectionCard title="Assignment">
         <KeyValueList
           items={[
-            { label: "Responsible User", value: responsibleUser?.fullName || "—" },
-            { label: "Responsible Team", value: responsibleTeam?.name || "—" },
+            { label: "Responsible User", value: responsibleUser?.fullName ?? "—" },
+            { label: "Responsible Team", value: responsibleTeam?.name ?? "—" },
           ]}
         />
       </SectionCard>
@@ -1164,10 +1162,13 @@ function ClientProfileTab({
               label: "Credit Limit",
               value: client.financialProfile?.creditLimit ? formatCurrency(client.financialProfile.creditLimit) : "—",
             },
-            { label: "Payment Terms", value: `${client.financialProfile?.paymentTerms || 30} days` },
+            {
+              label: "Payment Terms",
+              value: `${client.financialProfile?.paymentTerms ?? 30} days`,
+            },
             {
               label: "Preferred Payment",
-              value: client.financialProfile?.preferredPaymentMethod?.replace(/_/g, " ") || "—",
+              value: client.financialProfile?.preferredPaymentMethod?.replace(/_/g, " ") ?? "—",
             },
           ]}
         />
@@ -1216,14 +1217,14 @@ function ClientContactsTab({ contacts, client }: { contacts: Contact[]; client: 
                   accessorKey: "designation",
                   header: "Designation",
                   cell: ({ row }: { row: { original: Contact } }) => (
-                    <span className="text-sm">{row.original.designation || "—"}</span>
+                    <span className="text-sm">{row.original.designation ?? "—"}</span>
                   ),
                 },
                 {
                   accessorKey: "department",
                   header: "Department",
                   cell: ({ row }: { row: { original: Contact } }) => (
-                    <span className="text-sm">{row.original.department || "—"}</span>
+                    <span className="text-sm">{row.original.department ?? "—"}</span>
                   ),
                 },
                 {
@@ -1239,7 +1240,7 @@ function ClientContactsTab({ contacts, client }: { contacts: Contact[]; client: 
                   accessorKey: "phone",
                   header: "Phone",
                   cell: ({ row }: { row: { original: Contact } }) => (
-                    <span className="text-sm">{row.original.phone || row.original.mobile || "—"}</span>
+                    <span className="text-sm">{row.original.phone ?? row.original.mobile ?? "—"}</span>
                   ),
                 },
                 {
@@ -1249,7 +1250,7 @@ function ClientContactsTab({ contacts, client }: { contacts: Contact[]; client: 
                     <Badge variant="outline">{row.original.preferredChannel}</Badge>
                   ),
                 },
-              ] as any
+              ] as ColumnDef<DataTableFeatures, Contact>[]
             }
             getRowId={(row) => row.id}
             pageSize={10}
@@ -1273,12 +1274,12 @@ function ClientRegistrationsTab({ client }: { client: Client }) {
       <SectionCard title="Business Registrations">
         <KeyValueList
           items={[
-            { label: "PAN", value: client.identifiers.pan || "Not registered" },
-            { label: "TAN", value: client.identifiers.tan || "Not registered" },
-            { label: "GSTIN", value: client.identifiers.gstin || "Not registered" },
-            { label: "CIN / LLPIN", value: client.identifiers.cin || "Not registered" },
-            { label: "IEC", value: client.identifiers.iec || "Not registered" },
-            { label: "DIN(s)", value: client.identifiers.din?.join(", ") || "—" },
+            { label: "PAN", value: client.identifiers.pan ?? "Not registered" },
+            { label: "TAN", value: client.identifiers.tan ?? "Not registered" },
+            { label: "GSTIN", value: client.identifiers.gstin ?? "Not registered" },
+            { label: "CIN / LLPIN", value: client.identifiers.cin ?? "Not registered" },
+            { label: "IEC", value: client.identifiers.iec ?? "Not registered" },
+            { label: "DIN(s)", value: client.identifiers.din?.join(", ") ?? "—" },
           ]}
         />
       </SectionCard>
@@ -1287,7 +1288,7 @@ function ClientRegistrationsTab({ client }: { client: Client }) {
         <KeyValueList
           items={[
             { label: "Filing Frequency", value: client.complianceProfile.gstFilingFrequency ?? "Not configured" },
-            { label: "GSTIN", value: client.identifiers.gstin || "—" },
+            { label: "GSTIN", value: client.identifiers.gstin ?? "—" },
           ]}
         />
       </SectionCard>
@@ -1295,9 +1296,9 @@ function ClientRegistrationsTab({ client }: { client: Client }) {
       <SectionCard title="MCA Details">
         <KeyValueList
           items={[
-            { label: "CIN", value: client.identifiers.cin || "—" },
+            { label: "CIN", value: client.identifiers.cin ?? "—" },
             { label: "MCA Applicable", value: client.complianceProfile.mcaApplicable ? "Yes" : "No" },
-            { label: "DIN Count", value: String(client.identifiers.din?.length || 0) },
+            { label: "DIN Count", value: String(client.identifiers.din?.length ?? 0) },
           ]}
         />
       </SectionCard>
@@ -1305,7 +1306,7 @@ function ClientRegistrationsTab({ client }: { client: Client }) {
   );
 }
 
-function ClientLicensesTab({ client }: { client: Client }) {
+function ClientLicensesTab({ _client }: { client: Client }) {
   return (
     <div className="space-y-4">
       <SectionCard title="Licenses & Registrations">
@@ -1335,7 +1336,7 @@ function ClientLicensesTab({ client }: { client: Client }) {
 }
 
 function ClientActivityTab({
-  client,
+  _client,
   matters,
   tasks,
   communications,
@@ -1365,7 +1366,7 @@ function ClientActivityTab({
     ...communications.map((c) => ({
       id: `comm-${c.id}`,
       type: "communication" as const,
-      title: c.subject || c.content.slice(0, 60),
+      title: c.subject ?? c.content.slice(0, 60),
       description: `${c.channel.toUpperCase()} • ${c.direction}`,
       timestamp: c.sentAt || c.createdAt,
       entityUrl: `/dashboard/communications/${c.id}`,
@@ -1431,6 +1432,18 @@ function ClientOnboardingTab({ client }: { client: Client }) {
     },
   ];
 
+  const getStageClass = (isCompleted: boolean, isCurrent: boolean) => {
+    if (isCompleted) return "bg-green-500 text-white";
+    if (isCurrent) return "bg-blue-500 text-white";
+    return "bg-muted text-muted-foreground";
+  };
+
+  const getTextClass = (isCompleted: boolean, isCurrent: boolean) => {
+    if (isCompleted) return "text-green-700 dark:text-green-300";
+    if (isCurrent) return "text-blue-700 dark:text-blue-300";
+    return "";
+  };
+
   return (
     <div className="space-y-6">
       <SectionCard title="Onboarding Progress">
@@ -1453,7 +1466,7 @@ function ClientOnboardingTab({ client }: { client: Client }) {
       <SectionCard title="Onboarding Checklist">
         <div className="space-y-3">
           {allStages.map((s, index) => {
-            const isCompleted = completedStages.includes(s.id as any);
+            const isCompleted = completedStages.includes(s.id);
             const isCurrent = stage === s.id;
             return (
               <div
@@ -1468,28 +1481,13 @@ function ClientOnboardingTab({ client }: { client: Client }) {
                 <div
                   className={cn(
                     "flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full font-medium text-sm",
-                    isCompleted
-                      ? "bg-green-500 text-white"
-                      : isCurrent
-                        ? "bg-blue-500 text-white"
-                        : "bg-muted text-muted-foreground",
+                    getStageClass(isCompleted, isCurrent),
                   )}
                 >
                   {isCompleted ? <CheckCircle className="h-5 w-5" /> : index + 1}
                 </div>
                 <div className="flex-1">
-                  <p
-                    className={cn(
-                      "font-medium",
-                      isCompleted
-                        ? "text-green-700 dark:text-green-300"
-                        : isCurrent
-                          ? "text-blue-700 dark:text-blue-300"
-                          : "",
-                    )}
-                  >
-                    {s.label}
-                  </p>
+                  <p className={cn("font-medium", getTextClass(isCompleted, isCurrent))}>{s.label}</p>
                   <p className="mt-0.5 text-muted-foreground text-sm">{s.description}</p>
                   {isCompleted && <span className="text-green-600 text-xs dark:text-green-400">Completed</span>}
                   {isCurrent && !isCompleted && (

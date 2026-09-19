@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { useRouter } from "next/navigation";
 
+import type { ColumnDef } from "@tanstack/react-table";
 import {
   AlertTriangle,
   Clock,
@@ -21,20 +22,21 @@ import {
 import { ActivityTimeline } from "@/components/ca-nexus/activity-timeline";
 import { DataTable } from "@/components/ca-nexus/data-table";
 import { EmptyState } from "@/components/ca-nexus/empty-state";
-import { ClientLink, MatterLink } from "@/components/ca-nexus/object-link";
+import { Breadcrumb, ClientLink, MatterLink } from "@/components/ca-nexus/object-link";
 import { KeyValueList, SectionCard, StatTile } from "@/components/ca-nexus/page-blocks";
 import { DocumentRecordHeader } from "@/components/ca-nexus/record-header";
 import { CommunicationStatusBadge, PriorityBadge, TaskStatusBadge } from "@/components/ca-nexus/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { DataTableFeatures } from "@/lib/data-table-features";
 import { formatDate, formatDateTime, formatFileSize } from "@/lib/format";
 import { getClientById } from "@/mock-data/clients";
 import { getCommunicationsByDocument } from "@/mock-data/communications";
 import { getDocumentById } from "@/mock-data/documents";
 import { getMatterById, getTasksByDocument } from "@/mock-data/matters";
 import { getUserById } from "@/mock-data/users";
-import type { Communication, Document, Task } from "@/types";
+import type { Client, Communication, Document, Matter, Task, User } from "@/types";
 
 const documentTabs = [
   { id: "overview", label: "Overview", icon: FileText },
@@ -43,6 +45,54 @@ const documentTabs = [
   { id: "linked", label: "Linked", icon: FileText },
   { id: "activity", label: "Activity", icon: Clock },
 ];
+
+const getOcrBadgeVariant = (status: string): "default" | "secondary" | "destructive" | "outline" => {
+  switch (status) {
+    case "completed":
+      return "default";
+    case "processing":
+      return "secondary";
+    case "failed":
+      return "destructive";
+    default:
+      return "outline";
+  }
+};
+
+const getVirusScanBadgeVariant = (status: string): "default" | "destructive" | "outline" => {
+  switch (status) {
+    case "clean":
+      return "default";
+    case "infected":
+      return "destructive";
+    default:
+      return "outline";
+  }
+};
+
+const getVirusScanShieldClass = (status: string): string => {
+  switch (status) {
+    case "clean":
+      return "mr-1 h-3 w-3 text-green-600";
+    case "infected":
+      return "mr-1 h-3 w-3 text-red-600";
+    default:
+      return "mr-1 h-3 w-3";
+  }
+};
+
+const getOcrBadgeIcon = (status: string) => {
+  switch (status) {
+    case "completed":
+      return <Eye className="mr-1 h-3 w-3" />;
+    case "pending":
+      return <AlertTriangle className="mr-1 h-3 w-3" />;
+    case "processing":
+      return <Clock className="mr-1 h-3 w-3 animate-spin" />;
+    default:
+      return null;
+  }
+};
 
 export function DocumentDetail({ id }: { id: string }) {
   const router = useRouter();
@@ -79,6 +129,7 @@ export function DocumentDetail({ id }: { id: string }) {
 
   return (
     <div className="space-y-6">
+      <Breadcrumb items={[{ label: "Documents", href: "/dashboard/documents" }, { label: document.documentNumber }]} />
       <DocumentRecordHeader
         document={document}
         client={client}
@@ -168,9 +219,9 @@ function DocumentOverviewTab({
   tasks,
 }: {
   document: Document;
-  client: any;
-  matter: any;
-  uploadedBy: any;
+  client: Client | undefined;
+  matter: Matter | undefined;
+  uploadedBy: User | undefined;
   communications: Communication[];
   tasks: Task[];
   onMatterClick?: () => void;
@@ -178,6 +229,12 @@ function DocumentOverviewTab({
 }) {
   const pendingTasks = tasks.filter((t) => ["todo", "in_progress", "in_review"].includes(t.status));
   const overdueTasks = tasks.filter((t) => t.status !== "completed" && new Date(t.dueDate) < new Date());
+
+  const getTaskHint = (): string | undefined => {
+    if (overdueTasks.length > 0) return `${overdueTasks.length} overdue`;
+    if (pendingTasks.length > 0) return `${pendingTasks.length} pending`;
+    return undefined;
+  };
 
   return (
     <div className="space-y-6">
@@ -191,13 +248,7 @@ function DocumentOverviewTab({
         <StatTile
           label="Linked Tasks"
           value={tasks.length}
-          hint={
-            overdueTasks.length > 0
-              ? `${overdueTasks.length} overdue`
-              : pendingTasks.length > 0
-                ? `${pendingTasks.length} pending`
-                : undefined
-          }
+          hint={getTaskHint()}
           icon={<FileText className="h-5 w-5" />}
         />
         <StatTile label="Communications" value={communications.length} icon={<FileText className="h-5 w-5" />} />
@@ -255,20 +306,8 @@ function DocumentOverviewTab({
               {
                 label: "OCR Status",
                 value: (
-                  <Badge
-                    variant={
-                      document.ocrStatus === "completed"
-                        ? "default"
-                        : document.ocrStatus === "processing"
-                          ? "secondary"
-                          : document.ocrStatus === "failed"
-                            ? "destructive"
-                            : "outline"
-                    }
-                  >
-                    {document.ocrStatus === "completed" && <Eye className="mr-1 h-3 w-3" />}
-                    {document.ocrStatus === "pending" && <AlertTriangle className="mr-1 h-3 w-3" />}
-                    {document.ocrStatus === "processing" && <Clock className="mr-1 h-3 w-3 animate-spin" />}
+                  <Badge variant={getOcrBadgeVariant(document.ocrStatus)}>
+                    {getOcrBadgeIcon(document.ocrStatus)}
                     {document.ocrStatus.replace(/_/g, " ")}
                   </Badge>
                 ),
@@ -276,18 +315,8 @@ function DocumentOverviewTab({
               {
                 label: "Virus Scan",
                 value: (
-                  <Badge
-                    variant={
-                      document.virusScanStatus === "clean"
-                        ? "default"
-                        : document.virusScanStatus === "infected"
-                          ? "destructive"
-                          : "outline"
-                    }
-                  >
-                    <ShieldIcon
-                      className={`mr-1 h-3 w-3 ${document.virusScanStatus === "clean" ? "text-green-600" : document.virusScanStatus === "infected" ? "text-red-600" : ""}`}
-                    />
+                  <Badge variant={getVirusScanBadgeVariant(document.virusScanStatus)}>
+                    <ShieldIcon className={getVirusScanShieldClass(document.virusScanStatus)} />
                     {document.virusScanStatus}
                   </Badge>
                 ),
@@ -302,7 +331,7 @@ function DocumentOverviewTab({
                   ? `${document.retentionPolicy.retentionYears} years (${document.retentionPolicy.disposalAction})`
                   : "—",
               },
-              { label: "Legal Basis", value: document.retentionPolicy?.legalBasis || "—" },
+              { label: "Legal Basis", value: document.retentionPolicy?.legalBasis ?? "—" },
             ]}
           />
         </SectionCard>
@@ -340,15 +369,15 @@ function DocumentMetadataTab({ document }: { document: Document }) {
             { label: "Category", value: document.category },
             { label: "Document Type", value: document.documentType },
             { label: "Version", value: document.version },
-            { label: "Previous Version", value: document.previousVersionId || "—" },
+            { label: "Previous Version", value: document.previousVersionId ?? "—" },
             { label: "Is Latest", value: document.isLatestVersion ? "Yes" : "No" },
-            { label: "Tags", value: document.tags.join(", ") || "—" },
+            { label: "Tags", value: document.tags.join(", ") ?? "—" },
             { label: "Confidential", value: document.isConfidential ? "Yes" : "No" },
             { label: "Client ID", value: document.clientId },
-            { label: "Matter ID", value: document.matterId || "—" },
-            { label: "Task ID", value: document.taskId || "—" },
-            { label: "Compliance Cycle ID", value: document.complianceCycleId || "—" },
-            { label: "Source Communication ID", value: document.sourceCommunicationId || "—" },
+            { label: "Matter ID", value: document.matterId ?? "—" },
+            { label: "Task ID", value: document.taskId ?? "—" },
+            { label: "Compliance Cycle ID", value: document.complianceCycleId ?? "—" },
+            { label: "Source Communication ID", value: document.sourceCommunicationId ?? "—" },
             { label: "Uploaded By", value: document.uploadedById },
             { label: "Created At", value: document.createdAt },
             { label: "Updated At", value: document.updatedAt },
@@ -356,7 +385,7 @@ function DocumentMetadataTab({ document }: { document: Document }) {
         />
       </SectionCard>
 
-      {document.metadata && Object.keys(document.metadata).length > 0 && (
+      {Object.keys(document.metadata).length > 0 && (
         <SectionCard title="Custom Metadata">
           <KeyValueList
             items={Object.entries(document.metadata).map(([key, value]) => ({
@@ -373,7 +402,7 @@ function DocumentMetadataTab({ document }: { document: Document }) {
             items={[
               { label: "Retention Years", value: document.retentionPolicy.retentionYears },
               { label: "Disposal Action", value: document.retentionPolicy.disposalAction },
-              { label: "Legal Basis", value: document.retentionPolicy.legalBasis || "—" },
+              { label: "Legal Basis", value: document.retentionPolicy.legalBasis ?? "—" },
             ]}
           />
         ) : (
@@ -422,7 +451,7 @@ function DocumentClassificationTab({ document }: { document: Document }) {
       </SectionCard>
 
       <SectionCard title="Extracted Fields">
-        {document.classification.extractedFields && Object.keys(document.classification.extractedFields).length > 0 ? (
+        {Object.keys(document.classification.extractedFields).length > 0 ? (
           <KeyValueList
             items={Object.entries(document.classification.extractedFields).map(([key, value]) => ({
               label: key.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
@@ -459,8 +488,8 @@ function DocumentLinkedTab({
   onTaskClick,
 }: {
   document: Document;
-  client: any;
-  matter: any;
+  client: Client | undefined;
+  matter: Matter | undefined;
   communications: Communication[];
   tasks: Task[];
   onCommunicationClick: (comm: Communication) => void;
@@ -499,7 +528,7 @@ function DocumentLinkedTab({
                   accessorKey: "subject",
                   header: "Subject",
                   cell: ({ row }: { row: { original: Communication } }) => (
-                    <p className="font-medium text-sm">{row.original.subject || row.original.content.slice(0, 60)}</p>
+                    <p className="font-medium text-sm">{row.original.subject ?? row.original.content.slice(0, 60)}</p>
                   ),
                 },
                 {
@@ -537,7 +566,7 @@ function DocumentLinkedTab({
                     <span className="text-sm">{row.original.sentAt ? formatDateTime(row.original.sentAt) : "—"}</span>
                   ),
                 },
-              ] as any
+              ] as ColumnDef<DataTableFeatures, Communication>[]
             }
             getRowId={(row) => row.id}
             pageSize={10}
@@ -582,7 +611,7 @@ function DocumentLinkedTab({
                     <span className="text-sm">{formatDate(row.original.dueDate)}</span>
                   ),
                 },
-              ] as any
+              ] as ColumnDef<DataTableFeatures, Task>[]
             }
             getRowId={(row) => row.id}
             pageSize={10}
@@ -623,7 +652,7 @@ function DocumentActivityTab({
       id: `doc-upload`,
       type: "document" as const,
       title: `Document uploaded: ${document.originalFileName}`,
-      description: `Uploaded by ${getUserById(document.uploadedById)?.fullName || document.uploadedById}`,
+      description: `Uploaded by ${getUserById(document.uploadedById)?.fullName ?? document.uploadedById}`,
       timestamp: document.createdAt,
       entityUrl: "#",
     },
