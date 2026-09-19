@@ -23,6 +23,7 @@ export interface ContextAction {
   onClick: () => void;
   variant?: "default" | "outline" | "destructive" | "secondary" | "ghost";
   disabled?: boolean;
+  destructive?: boolean;
 }
 
 export interface ContextSection {
@@ -49,7 +50,6 @@ interface ContextSheetProps {
   side?: "right" | "left";
   width?: "sm" | "md" | "lg" | "xl" | "full";
   showHeader?: boolean;
-  onBack?: () => void;
 }
 
 const widthClasses = {
@@ -74,11 +74,14 @@ export function ContextSheet({
   side = "right",
   width = "lg",
   showHeader = true,
-  onBack,
 }: ContextSheetProps) {
-  const [activeSections, setActiveSections] = useState<Record<string, boolean>>(
-    sections.reduce((acc, s) => ({ ...acc, [s.id]: s.defaultOpen !== false }), {}),
-  );
+  const [activeSections, setActiveSections] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {};
+    for (const section of sections) {
+      initial[section.id] = section.defaultOpen !== false;
+    }
+    return initial;
+  });
 
   const toggleSection = (id: string) => {
     setActiveSections((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -124,7 +127,7 @@ export function ContextSheet({
                     </DropdownMenuContent>
                   </DropdownMenu>
                 )}
-                <Button variant="ghost" size="icon" onClick={onOpenChange} className="h-9 w-9">
+                <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)} className="h-9 w-9">
                   <X className="h-4 w-4" />
                 </Button>
               </div>
