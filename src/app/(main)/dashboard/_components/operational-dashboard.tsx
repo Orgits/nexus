@@ -37,12 +37,22 @@ import { formatDate, formatINR } from "@/lib/format";
 import { mockClients } from "@/mock-data/clients";
 import { mockCommunications } from "@/mock-data/communications";
 import { getComplianceSummary, getOverdueComplianceCycles, mockComplianceCycles } from "@/mock-data/compliance";
+import type {
+  CommunicationFollowupItem,
+  MissingDocumentItem,
+  PendingReviewItem,
+  RecentClientItem,
+  RecentMatterItem,
+  TeamWorkloadItem,
+  UpcomingDeadlineItem,
+  UrgentWorkItem,
+} from "@/mock-data/dashboard";
 import { mockTeamWorkload } from "@/mock-data/dashboard";
 import { getOverdueTasks, getTasksByStatus, mockMatters, mockTasks } from "@/mock-data/matters";
 import { getOverdueNotices, getUrgentNotices, mockNotices } from "@/mock-data/notices";
 import { getOverdueReviews, mockReviews } from "@/mock-data/reviews";
 import { getOverdueInvoices, mockInvoices } from "@/mock-data/time-billing";
-import { useNotificationStore } from "@/stores/notifications/notification-store";
+import type { ComplianceCycle, TaskStatus } from "@/types";
 
 const taskTabs = [
   { id: "all", label: "All", count: mockTasks.length },
@@ -86,6 +96,20 @@ const _reviewTabs = [
   { id: "in_progress", label: "In Progress", count: mockReviews.filter((r) => r.status === "in_progress").length },
 ];
 
+const formatDaysRemaining = (days: number): string => {
+  if (days < 0) return `${Math.abs(days)}d overdue`;
+  if (days === 0) return "Today";
+  return `${days}d`;
+};
+
+const getWorkloadStatus = (
+  item: TeamWorkloadItem,
+): { variant: "destructive" | "secondary" | "default"; label: string } => {
+  if (item.isOverloaded) return { variant: "destructive", label: "Overloaded" };
+  if (item.isUnderutilized) return { variant: "secondary", label: "Underutilized" };
+  return { variant: "default", label: "Optimal" };
+};
+
 export function OperationalDashboard() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("overview");
@@ -94,7 +118,6 @@ export function OperationalDashboard() {
   const [_noticeFilter, _setNoticeFilter] = useState("all");
   const [_reviewFilter, _setReviewFilter] = useState("all");
   const [mounted, setMounted] = useState(false);
-  const { notifications, unreadCount } = useNotificationStore();
 
   useEffect(() => {
     setMounted(true);
@@ -131,7 +154,9 @@ export function OperationalDashboard() {
         type: "compliance" as const,
         title: c.serviceName,
         clientName: mockClients.find((cl) => cl.id === c.clientId)?.displayName || "Unknown",
-        matterName: c.matterId ? mockMatters.find((m) => m.id === c.matterId)?.name : undefined,
+        matterName: c.matterId
+          ? (mockMatters.find((m) => m.id === c.matterId)?.name ?? "Compliance Cycle")
+          : "Compliance Cycle",
         dueDate: c.dueDate,
         daysOverdue: c.daysOverdue,
         priority: c.priority,
@@ -221,31 +246,39 @@ export function OperationalDashboard() {
         .map((d) => ({
           id: `md-${c.id}-${d.documentType}`,
           clientName: mockClients.find((cl) => cl.id === c.clientId)?.displayName || "Unknown",
-          matterName: c.matterId ? mockMatters.find((m) => m.id === c.matterId)?.name : "Compliance Cycle",
+          matterName: c.matterId
+            ? (mockMatters.find((m) => m.id === c.matterId)?.name ?? "Compliance Cycle")
+            : "Compliance Cycle",
           documentName: d.documentType.replace(/_/g, " "),
           requestedDate: d.requestedAt || c.createdAt,
           reminderCount: c.documentRequests.reduce((sum, dr) => sum + dr.reminderCount, 0),
           daysWaiting: Math.ceil(
             (Date.now() - new Date(d.requestedAt || c.createdAt).getTime()) / (1000 * 60 * 60 * 24),
           ),
-          status: "pending" as const,
+          status: "not_sent" as const,
           href: `/dashboard/compliance/${c.serviceType}/${c.id}`,
         })),
     )
     .sort((a, b) => b.daysWaiting - a.daysWaiting)
     .slice(0, 6);
 
-  const pendingReviews = mockReviews
+  const getObjectType = (reviewType: string): "matter" | "task" | "document" | "compliance" => {
+    switch (reviewType) {
+      case "compliance_filing":
+        return "compliance";
+      case "financial_statement":
+        return "matter";
+      default:
+        return "task";
+    }
+  };
+
+  const pendingReviews: PendingReviewItem[] = mockReviews
     .filter((r) => r.status === "pending" || r.status === "in_progress")
     .slice(0, 6)
     .map((r) => ({
       id: r.id,
-      objectType:
-        r.reviewType === "compliance_filing"
-          ? "compliance"
-          : r.reviewType === "financial_statement"
-            ? "matter"
-            : ("task" as const),
+      objectType: getObjectType(r.reviewType),
       objectName: r.title,
       clientName: mockClients.find((cl) => cl.id === r.clientId)?.displayName || "Unknown",
       submitterName: mockClients.find((cl) => cl.id === r.assignedReviewerId)?.displayName || "Unknown",
@@ -426,55 +459,47 @@ export function OperationalDashboard() {
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             <SectionCard title="Urgent Work" className="md:col-span-2 lg:col-span-2">
               {urgentWorkItems.length > 0 ? (
-                <DataTable
+                <DataTable<UrgentWorkItem>
                   data={urgentWorkItems}
-                  columns={
-                    [
-                      {
-                        accessorKey: "title",
-                        header: "Item",
-                        cell: ({ row }: { row: { original: (typeof urgentWorkItems)[0] } }) => (
-                          <div>
-                            <p className="font-medium text-sm">{row.original.title}</p>
-                            <p className="text-muted-foreground text-xs flex items-center gap-1">
-                              <span className="capitalize">{row.original.type}</span>
-                              {row.original.matterName && ` • ${row.original.matterName}`}
-                            </p>
-                          </div>
-                        ),
-                      },
-                      {
-                        accessorKey: "clientName",
-                        header: "Client",
-                        cell: ({ row }: { row: { original: (typeof urgentWorkItems)[0] } }) => (
-                          <ObjectLink href={row.original.href} label={row.original.clientName} />
-                        ),
-                      },
-                      {
-                        accessorKey: "daysOverdue",
-                        header: "Overdue",
-                        cell: ({ row }: { row: { original: (typeof urgentWorkItems)[0] } }) => (
-                          <span className={cn("font-medium", row.original.daysOverdue > 0 && "text-destructive")}>
-                            {row.original.daysOverdue > 0 ? `${row.original.daysOverdue}d` : "Due today"}
-                          </span>
-                        ),
-                      },
-                      {
-                        accessorKey: "priority",
-                        header: "Priority",
-                        cell: ({ row }: { row: { original: (typeof urgentWorkItems)[0] } }) => (
-                          <PriorityBadge priority={row.original.priority} />
-                        ),
-                      },
-                      {
-                        accessorKey: "assigneeName",
-                        header: "Assignee",
-                        cell: ({ row }: { row: { original: (typeof urgentWorkItems)[0] } }) => (
-                          <span className="text-sm">{row.original.assigneeName}</span>
-                        ),
-                      },
-                    ] as any
-                  }
+                  columns={[
+                    {
+                      accessorKey: "title",
+                      header: "Item",
+                      cell: ({ row }) => (
+                        <div>
+                          <p className="font-medium text-sm">{row.original.title}</p>
+                          <p className="text-muted-foreground text-xs flex items-center gap-1">
+                            <span className="capitalize">{row.original.type}</span>
+                            {row.original.matterName && ` • ${row.original.matterName}`}
+                          </p>
+                        </div>
+                      ),
+                    },
+                    {
+                      accessorKey: "clientName",
+                      header: "Client",
+                      cell: ({ row }) => <ObjectLink href={row.original.href} label={row.original.clientName} />,
+                    },
+                    {
+                      accessorKey: "daysOverdue",
+                      header: "Overdue",
+                      cell: ({ row }) => (
+                        <span className={cn("font-medium", row.original.daysOverdue > 0 && "text-destructive")}>
+                          {row.original.daysOverdue > 0 ? `${row.original.daysOverdue}d` : "Due today"}
+                        </span>
+                      ),
+                    },
+                    {
+                      accessorKey: "priority",
+                      header: "Priority",
+                      cell: ({ row }) => <PriorityBadge priority={row.original.priority} />,
+                    },
+                    {
+                      accessorKey: "assigneeName",
+                      header: "Assignee",
+                      cell: ({ row }) => <span className="text-sm">{row.original.assigneeName}</span>,
+                    },
+                  ]}
                   getRowId={(row) => row.id}
                   pageSize={8}
                   emptyMessage="No urgent work"
@@ -490,54 +515,42 @@ export function OperationalDashboard() {
 
             <SectionCard title="Upcoming Deadlines" className="md:col-span-2 lg:col-span-2">
               {upcomingDeadlines.length > 0 ? (
-                <DataTable
+                <DataTable<UpcomingDeadlineItem>
                   data={upcomingDeadlines}
-                  columns={
-                    [
-                      {
-                        accessorKey: "title",
-                        header: "Deadline",
-                        cell: ({ row }: { row: { original: (typeof upcomingDeadlines)[0] } }) => (
-                          <div>
-                            <p className="font-medium text-sm">{row.original.title}</p>
-                            <p className="text-muted-foreground text-xs capitalize">{row.original.type}</p>
-                          </div>
-                        ),
-                      },
-                      {
-                        accessorKey: "clientName",
-                        header: "Client",
-                        cell: ({ row }: { row: { original: (typeof upcomingDeadlines)[0] } }) => (
-                          <ObjectLink href={row.original.href} label={row.original.clientName} />
-                        ),
-                      },
-                      {
-                        accessorKey: "dueDate",
-                        header: "Due",
-                        cell: ({ row }: { row: { original: (typeof upcomingDeadlines)[0] } }) => (
-                          <span
-                            className={cn("font-medium text-sm", row.original.daysRemaining <= 2 && "text-destructive")}
-                          >
-                            {formatDate(row.original.dueDate)}
-                            <span className="ml-1 text-xs">
-                              {row.original.daysRemaining < 0
-                                ? `${Math.abs(row.original.daysRemaining)}d overdue`
-                                : row.original.daysRemaining === 0
-                                  ? "Today"
-                                  : `${row.original.daysRemaining}d`}
-                            </span>
-                          </span>
-                        ),
-                      },
-                      {
-                        accessorKey: "priority",
-                        header: "Priority",
-                        cell: ({ row }: { row: { original: (typeof upcomingDeadlines)[0] } }) => (
-                          <PriorityBadge priority={row.original.priority} />
-                        ),
-                      },
-                    ] as any
-                  }
+                  columns={[
+                    {
+                      accessorKey: "title",
+                      header: "Deadline",
+                      cell: ({ row }) => (
+                        <div>
+                          <p className="font-medium text-sm">{row.original.title}</p>
+                          <p className="text-muted-foreground text-xs capitalize">{row.original.type}</p>
+                        </div>
+                      ),
+                    },
+                    {
+                      accessorKey: "clientName",
+                      header: "Client",
+                      cell: ({ row }) => <ObjectLink href={row.original.href} label={row.original.clientName} />,
+                    },
+                    {
+                      accessorKey: "dueDate",
+                      header: "Due",
+                      cell: ({ row }) => (
+                        <span
+                          className={cn("font-medium text-sm", row.original.daysRemaining <= 2 && "text-destructive")}
+                        >
+                          {formatDate(row.original.dueDate)}
+                          <span className="ml-1 text-xs">{formatDaysRemaining(row.original.daysRemaining)}</span>
+                        </span>
+                      ),
+                    },
+                    {
+                      accessorKey: "priority",
+                      header: "Priority",
+                      cell: ({ row }) => <PriorityBadge priority={row.original.priority} />,
+                    },
+                  ]}
                   getRowId={(row) => row.id}
                   pageSize={8}
                   emptyMessage="No upcoming deadlines"
@@ -552,80 +565,61 @@ export function OperationalDashboard() {
             </SectionCard>
 
             <SectionCard title="Team Workload" className="lg:col-span-3">
-              <DataTable
+              <DataTable<TeamWorkloadItem>
                 data={mockTeamWorkload}
-                columns={
-                  [
-                    {
-                      accessorKey: "userName",
-                      header: "Team Member",
-                      cell: ({ row }: { row: { original: (typeof mockTeamWorkload)[0] } }) => (
-                        <div className="flex items-center gap-2">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-medium">
-                            {row.original.userName
-                              .split(" ")
-                              .map((n) => n[0])
-                              .join("")}
-                          </div>
-                          <div>
-                            <p className="font-medium text-sm">{row.original.userName}</p>
-                            <p className="text-muted-foreground text-xs">{row.original.role}</p>
-                          </div>
+                columns={[
+                  {
+                    accessorKey: "userName",
+                    header: "Team Member",
+                    cell: ({ row }) => (
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-medium">
+                          {row.original.userName
+                            .split(" ")
+                            .map((n) => n[0])
+                            .join("")}
                         </div>
-                      ),
-                    },
-                    {
-                      accessorKey: "openTasks",
-                      header: "Tasks",
-                      cell: ({ row }: { row: { original: (typeof mockTeamWorkload)[0] } }) => (
-                        <span className="font-medium">{row.original.openTasks}</span>
-                      ),
-                    },
-                    {
-                      accessorKey: "openMatters",
-                      header: "Matters",
-                      cell: ({ row }: { row: { original: (typeof mockTeamWorkload)[0] } }) => (
-                        <span className="text-sm">{row.original.openMatters}</span>
-                      ),
-                    },
-                    {
-                      accessorKey: "utilization",
-                      header: "Utilization",
-                      cell: ({ row }: { row: { original: (typeof mockTeamWorkload)[0] } }) => (
-                        <div className="w-32">
-                          <div className="h-2 overflow-hidden rounded-full bg-muted">
-                            <div
-                              className="h-full bg-primary"
-                              style={{ width: `${Math.min(row.original.utilization, 100)}%` }}
-                            />
-                          </div>
-                          <span className="text-muted-foreground text-xs">{row.original.utilization}%</span>
+                        <div>
+                          <p className="font-medium text-sm">{row.original.userName}</p>
+                          <p className="text-muted-foreground text-xs">{row.original.role}</p>
                         </div>
-                      ),
+                      </div>
+                    ),
+                  },
+                  {
+                    accessorKey: "openTasks",
+                    header: "Tasks",
+                    cell: ({ row }) => <span className="font-medium">{row.original.openTasks}</span>,
+                  },
+                  {
+                    accessorKey: "openMatters",
+                    header: "Matters",
+                    cell: ({ row }) => <span className="text-sm">{row.original.openMatters}</span>,
+                  },
+                  {
+                    accessorKey: "utilization",
+                    header: "Utilization",
+                    cell: ({ row }) => (
+                      <div className="w-32">
+                        <div className="h-2 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-full bg-primary"
+                            style={{ width: `${Math.min(row.original.utilization, 100)}%` }}
+                          />
+                        </div>
+                        <span className="text-muted-foreground text-xs">{row.original.utilization}%</span>
+                      </div>
+                    ),
+                  },
+                  {
+                    accessorKey: "isOverloaded",
+                    header: "Status",
+                    cell: ({ row }) => {
+                      const status = getWorkloadStatus(row.original);
+                      return <Badge variant={status.variant}>{status.label}</Badge>;
                     },
-                    {
-                      accessorKey: "isOverloaded",
-                      header: "Status",
-                      cell: ({ row }: { row: { original: (typeof mockTeamWorkload)[0] } }) => (
-                        <Badge
-                          variant={
-                            row.original.isOverloaded
-                              ? "destructive"
-                              : row.original.isUnderutilized
-                                ? "secondary"
-                                : "default"
-                          }
-                        >
-                          {row.original.isOverloaded
-                            ? "Overloaded"
-                            : row.original.isUnderutilized
-                              ? "Underutilized"
-                              : "Optimal"}
-                        </Badge>
-                      ),
-                    },
-                  ] as any
-                }
+                  },
+                ]}
                 getRowId={(row) => row.userId}
                 pageSize={6}
                 emptyMessage="No team data"
@@ -634,53 +628,45 @@ export function OperationalDashboard() {
 
             <SectionCard title="Missing Documents" className="lg:col-span-3">
               {missingDocuments.length > 0 ? (
-                <DataTable
+                <DataTable<MissingDocumentItem>
                   data={missingDocuments}
-                  columns={
-                    [
-                      {
-                        accessorKey: "documentName",
-                        header: "Document",
-                        cell: ({ row }: { row: { original: (typeof missingDocuments)[0] } }) => (
-                          <p className="font-medium text-sm">{row.original.documentName}</p>
-                        ),
-                      },
-                      {
-                        accessorKey: "clientName",
-                        header: "Client",
-                        cell: ({ row }: { row: { original: (typeof missingDocuments)[0] } }) => (
-                          <ObjectLink href={row.original.href} label={row.original.clientName} />
-                        ),
-                      },
-                      {
-                        accessorKey: "matterName",
-                        header: "Matter",
-                        cell: ({ row }: { row: { original: (typeof missingDocuments)[0] } }) => (
-                          <span className="text-sm">{row.original.matterName}</span>
-                        ),
-                      },
-                      {
-                        accessorKey: "daysWaiting",
-                        header: "Waiting",
-                        cell: ({ row }: { row: { original: (typeof missingDocuments)[0] } }) => (
-                          <span
-                            className={cn("font-medium text-sm", row.original.daysWaiting > 30 && "text-destructive")}
-                          >
-                            {row.original.daysWaiting}d
-                          </span>
-                        ),
-                      },
-                      {
-                        accessorKey: "reminderCount",
-                        header: "Reminders",
-                        cell: ({ row }: { row: { original: (typeof missingDocuments)[0] } }) => (
-                          <Badge variant={row.original.reminderCount > 0 ? "secondary" : "outline"}>
-                            {row.original.reminderCount}
-                          </Badge>
-                        ),
-                      },
-                    ] as any
-                  }
+                  columns={[
+                    {
+                      accessorKey: "documentName",
+                      header: "Document",
+                      cell: ({ row }) => <p className="font-medium text-sm">{row.original.documentName}</p>,
+                    },
+                    {
+                      accessorKey: "clientName",
+                      header: "Client",
+                      cell: ({ row }) => <ObjectLink href={row.original.href} label={row.original.clientName} />,
+                    },
+                    {
+                      accessorKey: "matterName",
+                      header: "Matter",
+                      cell: ({ row }) => <span className="text-sm">{row.original.matterName}</span>,
+                    },
+                    {
+                      accessorKey: "daysWaiting",
+                      header: "Waiting",
+                      cell: ({ row }) => (
+                        <span
+                          className={cn("font-medium text-sm", row.original.daysWaiting > 30 && "text-destructive")}
+                        >
+                          {row.original.daysWaiting}d
+                        </span>
+                      ),
+                    },
+                    {
+                      accessorKey: "reminderCount",
+                      header: "Reminders",
+                      cell: ({ row }) => (
+                        <Badge variant={row.original.reminderCount > 0 ? "secondary" : "outline"}>
+                          {row.original.reminderCount}
+                        </Badge>
+                      ),
+                    },
+                  ]}
                   getRowId={(row) => row.id}
                   pageSize={6}
                   emptyMessage="No missing documents"
@@ -696,58 +682,44 @@ export function OperationalDashboard() {
 
             <SectionCard title="Pending Reviews" className="lg:col-span-3">
               {pendingReviews.length > 0 ? (
-                <DataTable
+                <DataTable<PendingReviewItem>
                   data={pendingReviews}
-                  columns={
-                    [
-                      {
-                        accessorKey: "objectName",
-                        header: "Review",
-                        cell: ({ row }: { row: { original: (typeof pendingReviews)[0] } }) => (
-                          <p className="font-medium text-sm">{row.original.objectName}</p>
-                        ),
-                      },
-                      {
-                        accessorKey: "clientName",
-                        header: "Client",
-                        cell: ({ row }: { row: { original: (typeof pendingReviews)[0] } }) => (
-                          <ObjectLink href={row.original.href} label={row.original.clientName} />
-                        ),
-                      },
-                      {
-                        accessorKey: "submitterName",
-                        header: "Submitted By",
-                        cell: ({ row }: { row: { original: (typeof pendingReviews)[0] } }) => (
-                          <span className="text-sm">{row.original.submitterName}</span>
-                        ),
-                      },
-                      {
-                        accessorKey: "stage",
-                        header: "Stage",
-                        cell: ({ row }: { row: { original: (typeof pendingReviews)[0] } }) => (
-                          <Badge variant="secondary">{row.original.stage}</Badge>
-                        ),
-                      },
-                      {
-                        accessorKey: "daysAging",
-                        header: "Aging",
-                        cell: ({ row }: { row: { original: (typeof pendingReviews)[0] } }) => (
-                          <span
-                            className={cn("font-medium text-sm", row.original.daysAging > 14 && "text-destructive")}
-                          >
-                            {row.original.daysAging}d
-                          </span>
-                        ),
-                      },
-                      {
-                        accessorKey: "priority",
-                        header: "Priority",
-                        cell: ({ row }: { row: { original: (typeof pendingReviews)[0] } }) => (
-                          <PriorityBadge priority={row.original.priority} />
-                        ),
-                      },
-                    ] as any
-                  }
+                  columns={[
+                    {
+                      accessorKey: "objectName",
+                      header: "Review",
+                      cell: ({ row }) => <p className="font-medium text-sm">{row.original.objectName}</p>,
+                    },
+                    {
+                      accessorKey: "clientName",
+                      header: "Client",
+                      cell: ({ row }) => <ObjectLink href={row.original.href} label={row.original.clientName} />,
+                    },
+                    {
+                      accessorKey: "submitterName",
+                      header: "Submitted By",
+                      cell: ({ row }) => <span className="text-sm">{row.original.submitterName}</span>,
+                    },
+                    {
+                      accessorKey: "stage",
+                      header: "Stage",
+                      cell: ({ row }) => <Badge variant="secondary">{row.original.stage}</Badge>,
+                    },
+                    {
+                      accessorKey: "daysAging",
+                      header: "Aging",
+                      cell: ({ row }) => (
+                        <span className={cn("font-medium text-sm", row.original.daysAging > 14 && "text-destructive")}>
+                          {row.original.daysAging}d
+                        </span>
+                      ),
+                    },
+                    {
+                      accessorKey: "priority",
+                      header: "Priority",
+                      cell: ({ row }) => <PriorityBadge priority={row.original.priority} />,
+                    },
+                  ]}
                   getRowId={(row) => row.id}
                   pageSize={6}
                   emptyMessage="No pending reviews"
@@ -763,49 +735,39 @@ export function OperationalDashboard() {
 
             <SectionCard title="Communication Follow-ups" className="md:col-span-2 lg:col-span-2">
               {communicationFollowups.length > 0 ? (
-                <DataTable
+                <DataTable<CommunicationFollowupItem>
                   data={communicationFollowups}
-                  columns={
-                    [
-                      {
-                        accessorKey: "subject",
-                        header: "Communication",
-                        cell: ({ row }: { row: { original: (typeof communicationFollowups)[0] } }) => (
-                          <p className="font-medium text-sm line-clamp-1">{row.original.subject}</p>
-                        ),
-                      },
-                      {
-                        accessorKey: "clientName",
-                        header: "Client",
-                        cell: ({ row }: { row: { original: (typeof communicationFollowups)[0] } }) => (
-                          <ObjectLink href={row.original.href} label={row.original.clientName} />
-                        ),
-                      },
-                      {
-                        accessorKey: "type",
-                        header: "Channel",
-                        cell: ({ row }: { row: { original: (typeof communicationFollowups)[0] } }) => (
-                          <Badge variant="secondary" className="capitalize">
-                            {row.original.type}
-                          </Badge>
-                        ),
-                      },
-                      {
-                        accessorKey: "daysSinceActivity",
-                        header: "Last Activity",
-                        cell: ({ row }: { row: { original: (typeof communicationFollowups)[0] } }) => (
-                          <span className="text-sm">{row.original.daysSinceActivity}d ago</span>
-                        ),
-                      },
-                      {
-                        accessorKey: "followUpDue",
-                        header: "Follow-up Due",
-                        cell: ({ row }: { row: { original: (typeof communicationFollowups)[0] } }) => (
-                          <span className="text-sm">{row.original.followUpDue}</span>
-                        ),
-                      },
-                    ] as any
-                  }
+                  columns={[
+                    {
+                      accessorKey: "subject",
+                      header: "Communication",
+                      cell: ({ row }) => <p className="font-medium text-sm line-clamp-1">{row.original.subject}</p>,
+                    },
+                    {
+                      accessorKey: "clientName",
+                      header: "Client",
+                      cell: ({ row }) => <ObjectLink href={row.original.href} label={row.original.clientName} />,
+                    },
+                    {
+                      accessorKey: "type",
+                      header: "Channel",
+                      cell: ({ row }) => (
+                        <Badge variant="secondary" className="capitalize">
+                          {row.original.type}
+                        </Badge>
+                      ),
+                    },
+                    {
+                      accessorKey: "daysSinceActivity",
+                      header: "Last Activity",
+                      cell: ({ row }) => <span className="text-sm">{row.original.daysSinceActivity}d ago</span>,
+                    },
+                    {
+                      accessorKey: "followUpDue",
+                      header: "Follow-up Due",
+                      cell: ({ row }) => <span className="text-sm">{row.original.followUpDue}</span>,
+                    },
+                  ]}
                   getRowId={(row) => row.id}
                   pageSize={5}
                   emptyMessage="No follow-ups"
@@ -820,42 +782,37 @@ export function OperationalDashboard() {
             </SectionCard>
 
             <SectionCard title="Recent Clients" className="md:col-span-2 lg:col-span-2">
-              <DataTable
+              <DataTable<RecentClientItem>
                 data={recentClients}
-                columns={
-                  [
-                    {
-                      accessorKey: "name",
-                      header: "Client",
-                      cell: ({ row }: { row: { original: (typeof recentClients)[0] } }) => (
-                        <ClientLink client={mockClients.find((c) => c.id === row.original.id)!} showStatus={true} />
-                      ),
+                columns={[
+                  {
+                    accessorKey: "name",
+                    header: "Client",
+                    cell: ({ row }) => {
+                      const client = mockClients.find((c) => c.id === row.original.id);
+                      return client ? <ClientLink client={client} showStatus={true} /> : null;
                     },
-                    {
-                      accessorKey: "type",
-                      header: "Category",
-                      cell: ({ row }: { row: { original: (typeof recentClients)[0] } }) => (
-                        <span className="text-sm">{row.original.type}</span>
-                      ),
-                    },
-                    {
-                      accessorKey: "pendingWork",
-                      header: "Pending",
-                      cell: ({ row }: { row: { original: (typeof recentClients)[0] } }) => (
-                        <span className="font-medium">{row.original.pendingWork}</span>
-                      ),
-                    },
-                    {
-                      accessorKey: "nextDeadline",
-                      header: "Next Deadline",
-                      cell: ({ row }: { row: { original: (typeof recentClients)[0] } }) => (
-                        <span className="text-sm">
-                          {row.original.nextDeadline ? formatDate(row.original.nextDeadline) : "—"}
-                        </span>
-                      ),
-                    },
-                  ] as any
-                }
+                  },
+                  {
+                    accessorKey: "type",
+                    header: "Category",
+                    cell: ({ row }) => <span className="text-sm">{row.original.type}</span>,
+                  },
+                  {
+                    accessorKey: "pendingWork",
+                    header: "Pending",
+                    cell: ({ row }) => <span className="font-medium">{row.original.pendingWork}</span>,
+                  },
+                  {
+                    accessorKey: "nextDeadline",
+                    header: "Next Deadline",
+                    cell: ({ row }) => (
+                      <span className="text-sm">
+                        {row.original.nextDeadline ? formatDate(row.original.nextDeadline) : "—"}
+                      </span>
+                    ),
+                  },
+                ]}
                 getRowId={(row) => row.id}
                 pageSize={5}
                 emptyMessage="No recent clients"
@@ -863,49 +820,46 @@ export function OperationalDashboard() {
             </SectionCard>
 
             <SectionCard title="Recent Matters" className="md:col-span-2 lg:col-span-2">
-              <DataTable
+              <DataTable<RecentMatterItem>
                 data={recentMatters}
-                columns={
-                  [
-                    {
-                      accessorKey: "name",
-                      header: "Matter",
-                      cell: ({ row }: { row: { original: (typeof recentMatters)[0] } }) => (
-                        <MatterLink matter={mockMatters.find((m) => m.id === row.original.id)!} showStatus={true} />
-                      ),
+                columns={[
+                  {
+                    accessorKey: "name",
+                    header: "Matter",
+                    cell: ({ row }) => {
+                      const matter = mockMatters.find((m) => m.id === row.original.id);
+                      return matter ? <MatterLink matter={matter} showStatus={true} /> : null;
                     },
-                    {
-                      accessorKey: "clientName",
-                      header: "Client",
-                      cell: ({ row }: { row: { original: (typeof recentMatters)[0] } }) => (
-                        <ObjectLink href={row.original.href} label={row.original.clientName} />
-                      ),
-                    },
-                    {
-                      accessorKey: "progress",
-                      header: "Progress",
-                      cell: ({ row }: { row: { original: (typeof recentMatters)[0] } }) => (
-                        <div className="w-32">
-                          <div className="h-2 overflow-hidden rounded-full bg-muted">
-                            <div className="h-full bg-primary" style={{ width: `${row.original.progress}%` }} />
-                          </div>
-                          <span className="text-muted-foreground text-xs">{row.original.progress}%</span>
+                  },
+                  {
+                    accessorKey: "clientName",
+                    header: "Client",
+                    cell: ({ row }) => <ObjectLink href={row.original.href} label={row.original.clientName} />,
+                  },
+                  {
+                    accessorKey: "progress",
+                    header: "Progress",
+                    cell: ({ row }) => (
+                      <div className="w-32">
+                        <div className="h-2 overflow-hidden rounded-full bg-muted">
+                          <div className="h-full bg-primary" style={{ width: `${row.original.progress}%` }} />
                         </div>
-                      ),
-                    },
-                    {
-                      accessorKey: "dueDate",
-                      header: "Due Date",
-                      cell: ({ row }: { row: { original: (typeof recentMatters)[0] } }) => (
-                        <span
-                          className={cn("text-sm", new Date(row.original.dueDate) < new Date() && "text-destructive")}
-                        >
-                          {formatDate(row.original.dueDate)}
-                        </span>
-                      ),
-                    },
-                  ] as any
-                }
+                        <span className="text-muted-foreground text-xs">{row.original.progress}%</span>
+                      </div>
+                    ),
+                  },
+                  {
+                    accessorKey: "dueDate",
+                    header: "Due Date",
+                    cell: ({ row }) => (
+                      <span
+                        className={cn("text-sm", new Date(row.original.dueDate) < new Date() && "text-destructive")}
+                      >
+                        {formatDate(row.original.dueDate)}
+                      </span>
+                    ),
+                  },
+                ]}
                 getRowId={(row) => row.id}
                 pageSize={5}
                 emptyMessage="No recent matters"
@@ -942,47 +896,37 @@ export function OperationalDashboard() {
               {urgentNotices.length > 0 ? (
                 <DataTable
                   data={urgentNoticesMapped}
-                  columns={
-                    [
-                      {
-                        accessorKey: "subject",
-                        header: "Notice",
-                        cell: ({ row }: { row: { original: (typeof urgentNoticesMapped)[0] } }) => (
-                          <p className="font-medium text-sm line-clamp-1">{row.original.subject}</p>
-                        ),
-                      },
-                      {
-                        accessorKey: "authority",
-                        header: "Authority",
-                        cell: ({ row }: { row: { original: (typeof urgentNoticesMapped)[0] } }) => (
-                          <Badge variant="secondary">{row.original.authority}</Badge>
-                        ),
-                      },
-                      {
-                        accessorKey: "clientName",
-                        header: "Client",
-                        cell: ({ row }: { row: { original: (typeof urgentNoticesMapped)[0] } }) => (
-                          <ObjectLink href={row.original.href} label={row.original.clientName} />
-                        ),
-                      },
-                      {
-                        accessorKey: "responseDueDate",
-                        header: "Due Date",
-                        cell: ({ row }: { row: { original: (typeof urgentNoticesMapped)[0] } }) => (
-                          <span className="font-medium text-destructive text-sm">
-                            {formatDate(row.original.responseDueDate)}
-                          </span>
-                        ),
-                      },
-                      {
-                        accessorKey: "priority",
-                        header: "Priority",
-                        cell: ({ row }: { row: { original: (typeof urgentNotices)[0] } }) => (
-                          <PriorityBadge priority={row.original.priority} />
-                        ),
-                      },
-                    ] as any
-                  }
+                  columns={[
+                    {
+                      accessorKey: "subject",
+                      header: "Notice",
+                      cell: ({ row }) => <p className="font-medium text-sm line-clamp-1">{row.original.subject}</p>,
+                    },
+                    {
+                      accessorKey: "authority",
+                      header: "Authority",
+                      cell: ({ row }) => <Badge variant="secondary">{row.original.authority}</Badge>,
+                    },
+                    {
+                      accessorKey: "clientName",
+                      header: "Client",
+                      cell: ({ row }) => <ObjectLink href={row.original.href} label={row.original.clientName} />,
+                    },
+                    {
+                      accessorKey: "responseDueDate",
+                      header: "Due Date",
+                      cell: ({ row }) => (
+                        <span className="font-medium text-destructive text-sm">
+                          {formatDate(row.original.responseDueDate)}
+                        </span>
+                      ),
+                    },
+                    {
+                      accessorKey: "priority",
+                      header: "Priority",
+                      cell: ({ row }) => <PriorityBadge priority={row.original.priority} />,
+                    },
+                  ]}
                   getRowId={(row) => row.id}
                   pageSize={5}
                   emptyMessage="No urgent notices"
@@ -1001,48 +945,42 @@ export function OperationalDashboard() {
         <TabsContent value="urgent" className="space-y-6">
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             <SectionCard title="Urgent Work Items">
-              <DataTable
+              <DataTable<UrgentWorkItem>
                 data={urgentWorkItems}
-                columns={
-                  [
-                    {
-                      accessorKey: "title",
-                      header: "Item",
-                      cell: ({ row }: { row: { original: (typeof urgentWorkItems)[0] } }) => (
-                        <div>
-                          <p className="font-medium text-sm">{row.original.title}</p>
-                          <p className="text-muted-foreground text-xs flex items-center gap-1">
-                            <span className="capitalize">{row.original.type}</span>
-                            {row.original.matterName && ` • ${row.original.matterName}`}
-                          </p>
-                        </div>
-                      ),
-                    },
-                    {
-                      accessorKey: "clientName",
-                      header: "Client",
-                      cell: ({ row }: { row: { original: (typeof urgentWorkItems)[0] } }) => (
-                        <ObjectLink href={row.original.href} label={row.original.clientName} />
-                      ),
-                    },
-                    {
-                      accessorKey: "daysOverdue",
-                      header: "Overdue",
-                      cell: ({ row }: { row: { original: (typeof urgentWorkItems)[0] } }) => (
-                        <span className={cn("font-medium", row.original.daysOverdue > 0 && "text-destructive")}>
-                          {row.original.daysOverdue > 0 ? `${row.original.daysOverdue}d` : "Due today"}
-                        </span>
-                      ),
-                    },
-                    {
-                      accessorKey: "priority",
-                      header: "Priority",
-                      cell: ({ row }: { row: { original: (typeof urgentWorkItems)[0] } }) => (
-                        <PriorityBadge priority={row.original.priority} />
-                      ),
-                    },
-                  ] as any
-                }
+                columns={[
+                  {
+                    accessorKey: "title",
+                    header: "Item",
+                    cell: ({ row }) => (
+                      <div>
+                        <p className="font-medium text-sm">{row.original.title}</p>
+                        <p className="text-muted-foreground text-xs flex items-center gap-1">
+                          <span className="capitalize">{row.original.type}</span>
+                          {row.original.matterName && ` • ${row.original.matterName}`}
+                        </p>
+                      </div>
+                    ),
+                  },
+                  {
+                    accessorKey: "clientName",
+                    header: "Client",
+                    cell: ({ row }) => <ObjectLink href={row.original.href} label={row.original.clientName} />,
+                  },
+                  {
+                    accessorKey: "daysOverdue",
+                    header: "Overdue",
+                    cell: ({ row }) => (
+                      <span className={cn("font-medium", row.original.daysOverdue > 0 && "text-destructive")}>
+                        {row.original.daysOverdue > 0 ? `${row.original.daysOverdue}d` : "Due today"}
+                      </span>
+                    ),
+                  },
+                  {
+                    accessorKey: "priority",
+                    header: "Priority",
+                    cell: ({ row }) => <PriorityBadge priority={row.original.priority} />,
+                  },
+                ]}
                 getRowId={(row) => row.id}
                 pageSize={15}
                 emptyMessage="No urgent work"
@@ -1050,46 +988,40 @@ export function OperationalDashboard() {
             </SectionCard>
 
             <SectionCard title="Overdue Compliance">
-              <DataTable
+              <DataTable<ComplianceCycle>
                 data={getOverdueComplianceCycles()}
-                columns={
-                  [
-                    {
-                      accessorKey: "serviceName",
-                      header: "Cycle",
-                      cell: ({ row }: { row: { original: (typeof mockComplianceCycles)[0] } }) => (
-                        <div>
-                          <p className="font-medium text-sm">{row.original.serviceName}</p>
-                          <p className="text-muted-foreground text-xs">{row.original.period.label}</p>
-                        </div>
-                      ),
+                columns={[
+                  {
+                    accessorKey: "serviceName",
+                    header: "Cycle",
+                    cell: ({ row }) => (
+                      <div>
+                        <p className="font-medium text-sm">{row.original.serviceName}</p>
+                        <p className="text-muted-foreground text-xs">{row.original.period.label}</p>
+                      </div>
+                    ),
+                  },
+                  {
+                    accessorKey: "clientId",
+                    header: "Client",
+                    cell: ({ row }) => {
+                      const client = mockClients.find((c) => c.id === row.original.clientId);
+                      return client ? <ClientLink client={client} showStatus={true} /> : null;
                     },
-                    {
-                      accessorKey: "clientId",
-                      header: "Client",
-                      cell: ({ row }: { row: { original: (typeof mockComplianceCycles)[0] } }) => (
-                        <ClientLink
-                          client={mockClients.find((c) => c.id === row.original.clientId)!}
-                          showStatus={true}
-                        />
-                      ),
-                    },
-                    {
-                      accessorKey: "daysOverdue",
-                      header: "Days Overdue",
-                      cell: ({ row }: { row: { original: (typeof mockComplianceCycles)[0] } }) => (
-                        <span className="font-medium text-destructive text-sm">{row.original.daysOverdue}d</span>
-                      ),
-                    },
-                    {
-                      accessorKey: "priority",
-                      header: "Priority",
-                      cell: ({ row }: { row: { original: (typeof mockComplianceCycles)[0] } }) => (
-                        <PriorityBadge priority={row.original.priority} />
-                      ),
-                    },
-                  ] as any
-                }
+                  },
+                  {
+                    accessorKey: "daysOverdue",
+                    header: "Days Overdue",
+                    cell: ({ row }) => (
+                      <span className="font-medium text-destructive text-sm">{row.original.daysOverdue}d</span>
+                    ),
+                  },
+                  {
+                    accessorKey: "priority",
+                    header: "Priority",
+                    cell: ({ row }) => <PriorityBadge priority={row.original.priority} />,
+                  },
+                ]}
                 getRowId={(row) => row.id}
                 pageSize={10}
                 emptyMessage="No overdue compliance"
@@ -1099,43 +1031,35 @@ export function OperationalDashboard() {
             <SectionCard title="Urgent Notices">
               <DataTable
                 data={urgentNotices}
-                columns={
-                  [
-                    {
-                      accessorKey: "subject",
-                      header: "Notice",
-                      cell: ({ row }: { row: { original: (typeof urgentNotices)[0] } }) => (
-                        <p className="font-medium text-sm line-clamp-1">{row.original.subject}</p>
-                      ),
+                columns={[
+                  {
+                    accessorKey: "subject",
+                    header: "Notice",
+                    cell: ({ row }) => <p className="font-medium text-sm line-clamp-1">{row.original.subject}</p>,
+                  },
+                  {
+                    accessorKey: "authority",
+                    header: "Authority",
+                    cell: ({ row }) => <Badge variant="secondary">{row.original.authority}</Badge>,
+                  },
+                  {
+                    accessorKey: "clientId",
+                    header: "Client",
+                    cell: ({ row }) => {
+                      const client = mockClients.find((c) => c.id === row.original.clientId);
+                      return client ? <ClientLink client={client} showStatus={true} /> : null;
                     },
-                    {
-                      accessorKey: "authority",
-                      header: "Authority",
-                      cell: ({ row }: { row: { original: (typeof urgentNotices)[0] } }) => (
-                        <Badge variant="secondary">{row.original.authority}</Badge>
-                      ),
-                    },
-                    {
-                      accessorKey: "clientId",
-                      header: "Client",
-                      cell: ({ row }: { row: { original: (typeof urgentNotices)[0] } }) => (
-                        <ClientLink
-                          client={mockClients.find((c) => c.id === row.original.clientId)!}
-                          showStatus={true}
-                        />
-                      ),
-                    },
-                    {
-                      accessorKey: "responseDueDate",
-                      header: "Due Date",
-                      cell: ({ row }: { row: { original: (typeof urgentNotices)[0] } }) => (
-                        <span className="font-medium text-destructive text-sm">
-                          {formatDate(row.original.responseDueDate)}
-                        </span>
-                      ),
-                    },
-                  ] as any
-                }
+                  },
+                  {
+                    accessorKey: "responseDueDate",
+                    header: "Due Date",
+                    cell: ({ row }) => (
+                      <span className="font-medium text-destructive text-sm">
+                        {formatDate(row.original.responseDueDate)}
+                      </span>
+                    ),
+                  },
+                ]}
                 getRowId={(row) => row.id}
                 pageSize={10}
                 emptyMessage="No urgent notices"
@@ -1146,54 +1070,40 @@ export function OperationalDashboard() {
 
         <TabsContent value="deadlines" className="space-y-6">
           <SectionCard title="Upcoming Deadlines">
-            <DataTable
+            <DataTable<UpcomingDeadlineItem>
               data={upcomingDeadlines}
-              columns={
-                [
-                  {
-                    accessorKey: "title",
-                    header: "Deadline",
-                    cell: ({ row }: { row: { original: (typeof upcomingDeadlines)[0] } }) => (
-                      <div>
-                        <p className="font-medium text-sm">{row.original.title}</p>
-                        <p className="text-muted-foreground text-xs capitalize">{row.original.type}</p>
-                      </div>
-                    ),
-                  },
-                  {
-                    accessorKey: "clientName",
-                    header: "Client",
-                    cell: ({ row }: { row: { original: (typeof upcomingDeadlines)[0] } }) => (
-                      <ObjectLink href={row.original.href} label={row.original.clientName} />
-                    ),
-                  },
-                  {
-                    accessorKey: "dueDate",
-                    header: "Due Date",
-                    cell: ({ row }: { row: { original: (typeof upcomingDeadlines)[0] } }) => (
-                      <span
-                        className={cn("font-medium text-sm", row.original.daysRemaining <= 2 && "text-destructive")}
-                      >
-                        {formatDate(row.original.dueDate)}
-                        <span className="ml-1 text-xs">
-                          {row.original.daysRemaining < 0
-                            ? `${Math.abs(row.original.daysRemaining)}d overdue`
-                            : row.original.daysRemaining === 0
-                              ? "Today"
-                              : `${row.original.daysRemaining}d`}
-                        </span>
-                      </span>
-                    ),
-                  },
-                  {
-                    accessorKey: "priority",
-                    header: "Priority",
-                    cell: ({ row }: { row: { original: (typeof upcomingDeadlines)[0] } }) => (
-                      <PriorityBadge priority={row.original.priority} />
-                    ),
-                  },
-                ] as any
-              }
+              columns={[
+                {
+                  accessorKey: "title",
+                  header: "Deadline",
+                  cell: ({ row }) => (
+                    <div>
+                      <p className="font-medium text-sm">{row.original.title}</p>
+                      <p className="text-muted-foreground text-xs capitalize">{row.original.type}</p>
+                    </div>
+                  ),
+                },
+                {
+                  accessorKey: "clientName",
+                  header: "Client",
+                  cell: ({ row }) => <ObjectLink href={row.original.href} label={row.original.clientName} />,
+                },
+                {
+                  accessorKey: "dueDate",
+                  header: "Due Date",
+                  cell: ({ row }) => (
+                    <span className={cn("font-medium text-sm", row.original.daysRemaining <= 2 && "text-destructive")}>
+                      {formatDate(row.original.dueDate)}
+                      <span className="ml-1 text-xs">{formatDaysRemaining(row.original.daysRemaining)}</span>
+                    </span>
+                  ),
+                },
+                {
+                  accessorKey: "priority",
+                  header: "Priority",
+                  cell: ({ row }) => <PriorityBadge priority={row.original.priority} />,
+                },
+              ]}
               getRowId={(row) => row.id}
               pageSize={15}
               emptyMessage="No upcoming deadlines"
@@ -1216,74 +1126,65 @@ export function OperationalDashboard() {
             ))}
           </div>
           <DataTable
-            data={taskFilter === "all" ? mockTasks : getTasksByStatus(taskFilter as any)}
-            columns={
-              [
-                {
-                  accessorKey: "title",
-                  header: "Task",
-                  cell: ({ row }: { row: { original: (typeof mockTasks)[0] } }) => (
-                    <p className="font-medium text-sm">{row.original.title}</p>
-                  ),
+            data={taskFilter === "all" ? mockTasks : getTasksByStatus(taskFilter as TaskStatus)}
+            columns={[
+              {
+                accessorKey: "title",
+                header: "Task",
+                cell: ({ row }) => <p className="font-medium text-sm">{row.original.title}</p>,
+              },
+              {
+                accessorKey: "taskNumber",
+                header: "ID",
+                cell: ({ row }) => <span className="text-muted-foreground text-xs">{row.original.taskNumber}</span>,
+              },
+              {
+                accessorKey: "clientId",
+                header: "Client",
+                cell: ({ row }) => {
+                  const client = mockClients.find((c) => c.id === row.original.clientId);
+                  return client ? <ClientLink client={client} showStatus={true} /> : null;
                 },
-                {
-                  accessorKey: "taskNumber",
-                  header: "ID",
-                  cell: ({ row }: { row: { original: (typeof mockTasks)[0] } }) => (
-                    <span className="text-muted-foreground text-xs">{row.original.taskNumber}</span>
-                  ),
+              },
+              {
+                accessorKey: "matterId",
+                header: "Matter",
+                cell: ({ row }) => {
+                  const matter = mockMatters.find((m) => m.id === row.original.matterId);
+                  return matter ? (
+                    <MatterLink matter={matter} showStatus={false} />
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  );
                 },
-                {
-                  accessorKey: "clientId",
-                  header: "Client",
-                  cell: ({ row }: { row: { original: (typeof mockTasks)[0] } }) => (
-                    <ClientLink client={mockClients.find((c) => c.id === row.original.clientId)!} showStatus={true} />
-                  ),
-                },
-                {
-                  accessorKey: "matterId",
-                  header: "Matter",
-                  cell: ({ row }: { row: { original: (typeof mockTasks)[0] } }) => {
-                    const matter = mockMatters.find((m) => m.id === row.original.matterId);
-                    return matter ? (
-                      <MatterLink matter={matter} showStatus={false} />
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    );
-                  },
-                },
-                {
-                  accessorKey: "status",
-                  header: "Status",
-                  cell: ({ row }: { row: { original: (typeof mockTasks)[0] } }) => (
-                    <TaskStatusBadge status={row.original.status} />
-                  ),
-                },
-                {
-                  accessorKey: "priority",
-                  header: "Priority",
-                  cell: ({ row }: { row: { original: (typeof mockTasks)[0] } }) => (
-                    <PriorityBadge priority={row.original.priority} />
-                  ),
-                },
-                {
-                  accessorKey: "dueDate",
-                  header: "Due Date",
-                  cell: ({ row }: { row: { original: (typeof mockTasks)[0] } }) => (
-                    <span
-                      className={cn(
-                        "text-sm",
-                        new Date(row.original.dueDate) < new Date() &&
-                          row.original.status !== "completed" &&
-                          "text-destructive",
-                      )}
-                    >
-                      {formatDate(row.original.dueDate)}
-                    </span>
-                  ),
-                },
-              ] as any
-            }
+              },
+              {
+                accessorKey: "status",
+                header: "Status",
+                cell: ({ row }) => <TaskStatusBadge status={row.original.status} />,
+              },
+              {
+                accessorKey: "priority",
+                header: "Priority",
+                cell: ({ row }) => <PriorityBadge priority={row.original.priority} />,
+              },
+              {
+                accessorKey: "dueDate",
+                header: "Due Date",
+                cell: ({ row }) => (
+                  <span
+                    className={cn(
+                      "text-sm",
+                      new Date(row.original.dueDate) < new Date() &&
+                        row.original.status !== "completed" &&
+                        "text-destructive",
+                    )}
+                  >
+                    {formatDate(row.original.dueDate)}
+                  </span>
+                ),
+              },
+            ]}
             getRowId={(row) => row.id}
             pageSize={15}
             emptyMessage="No tasks"
@@ -1305,70 +1206,77 @@ export function OperationalDashboard() {
               </Button>
             ))}
           </div>
-          <DataTable
-            data={
-              complianceFilter === "all"
-                ? mockComplianceCycles
-                : complianceFilter === "overdue"
-                  ? getOverdueComplianceCycles()
-                  : complianceFilter === "pending"
-                    ? mockComplianceCycles.filter((c) => c.missingDocuments.some((d) => d.isMandatory && !d.receivedAt))
-                    : mockComplianceCycles.filter((c) => c.status === "in_review" || c.status === "ready_for_review")
+          {(() => {
+            let complianceData: ComplianceCycle[];
+            if (complianceFilter === "all") {
+              complianceData = mockComplianceCycles;
+            } else if (complianceFilter === "overdue") {
+              complianceData = getOverdueComplianceCycles();
+            } else if (complianceFilter === "pending") {
+              complianceData = mockComplianceCycles.filter((c) =>
+                c.missingDocuments.some((d) => d.isMandatory && !d.receivedAt),
+              );
+            } else {
+              complianceData = mockComplianceCycles.filter(
+                (c) => c.status === "in_review" || c.status === "ready_for_review",
+              );
             }
-            columns={
-              [
-                {
-                  accessorKey: "cycleNumber",
-                  header: "Cycle",
-                  cell: ({ row }: { row: { original: (typeof mockComplianceCycles)[0] } }) => (
-                    <div>
-                      <p className="font-medium text-sm">{row.original.cycleNumber}</p>
-                      <p className="text-muted-foreground text-xs">{row.original.period.label}</p>
-                    </div>
-                  ),
-                },
-                {
-                  accessorKey: "serviceType",
-                  header: "Type",
-                  cell: ({ row }: { row: { original: (typeof mockComplianceCycles)[0] } }) => (
-                    <Badge variant="secondary" className="capitalize">
-                      {row.original.serviceType.replace(/_/g, " ")}
-                    </Badge>
-                  ),
-                },
-                {
-                  accessorKey: "clientId",
-                  header: "Client",
-                  cell: ({ row }: { row: { original: (typeof mockComplianceCycles)[0] } }) => (
-                    <ClientLink client={mockClients.find((c) => c.id === row.original.clientId)!} showStatus={true} />
-                  ),
-                },
-                {
-                  accessorKey: "status",
-                  header: "Status",
-                  cell: ({ row }: { row: { original: (typeof mockComplianceCycles)[0] } }) => (
-                    <ComplianceStatusBadge status={row.original.status} />
-                  ),
-                },
-                {
-                  accessorKey: "dueDate",
-                  header: "Due Date",
-                  cell: ({ row }: { row: { original: (typeof mockComplianceCycles)[0] } }) => (
-                    <span className={cn("font-medium text-sm", row.original.isOverdue && "text-destructive")}>
-                      {formatDate(row.original.dueDate)}
-                      {row.original.isOverdue && ` (${row.original.daysOverdue}d overdue)`}
-                    </span>
-                  ),
-                },
-              ] as any
-            }
-            getRowId={(row) => row.id}
-            pageSize={15}
-            emptyMessage="No compliance cycles"
-            rowActions={[
-              { label: "View", action: (row) => router.push(`/dashboard/compliance/${row.serviceType}/${row.id}`) },
-            ]}
-          />
+            return (
+              <DataTable<ComplianceCycle>
+                data={complianceData}
+                columns={[
+                  {
+                    accessorKey: "cycleNumber",
+                    header: "Cycle",
+                    cell: ({ row }) => (
+                      <div>
+                        <p className="font-medium text-sm">{row.original.cycleNumber}</p>
+                        <p className="text-muted-foreground text-xs">{row.original.period.label}</p>
+                      </div>
+                    ),
+                  },
+                  {
+                    accessorKey: "serviceType",
+                    header: "Type",
+                    cell: ({ row }) => (
+                      <Badge variant="secondary" className="capitalize">
+                        {row.original.serviceType.replace(/_/g, " ")}
+                      </Badge>
+                    ),
+                  },
+                  {
+                    accessorKey: "clientId",
+                    header: "Client",
+                    cell: ({ row }) => {
+                      const client = mockClients.find((c) => c.id === row.original.clientId);
+                      return client ? <ClientLink client={client} showStatus={true} /> : null;
+                    },
+                  },
+                  {
+                    accessorKey: "status",
+                    header: "Status",
+                    cell: ({ row }) => <ComplianceStatusBadge status={row.original.status} />,
+                  },
+                  {
+                    accessorKey: "dueDate",
+                    header: "Due Date",
+                    cell: ({ row }) => (
+                      <span className={cn("font-medium text-sm", row.original.isOverdue && "text-destructive")}>
+                        {formatDate(row.original.dueDate)}
+                        {row.original.isOverdue && ` (${row.original.daysOverdue}d overdue)`}
+                      </span>
+                    ),
+                  },
+                ]}
+                getRowId={(row) => row.id}
+                pageSize={15}
+                emptyMessage="No compliance cycles"
+                rowActions={[
+                  { label: "View", action: (row) => router.push(`/dashboard/compliance/${row.serviceType}/${row.id}`) },
+                ]}
+              />
+            );
+          })()}
         </TabsContent>
 
         <TabsContent value="activity" className="space-y-6">

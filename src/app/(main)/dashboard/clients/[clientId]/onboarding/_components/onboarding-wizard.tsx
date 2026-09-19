@@ -6,11 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { cn } from "cn";
 import {
-  AlertCircle,
-  ArrowLeft,
-  ArrowRight,
   Building2,
-  Calendar,
   CheckCircle,
   ChevronLeft,
   ChevronRight,
@@ -18,32 +14,18 @@ import {
   FileCheck,
   FileText,
   Key,
-  Mail,
-  MessageSquare,
-  MoreHorizontal,
   Plus,
-  Search,
   Send,
-  Shield,
   ShieldCheck,
-  Trash2,
   User,
   Users,
-  X,
 } from "lucide-react";
 
-import { ActivityTimeline } from "@/components/ca-nexus/activity-timeline";
 import { DataTable } from "@/components/ca-nexus/data-table";
 import { EmptyState } from "@/components/ca-nexus/empty-state";
-import { FilterBar, type FilterConfig } from "@/components/ca-nexus/filter-bar";
-import { type InternalNote, InternalNoteComposer } from "@/components/ca-nexus/internal-note-composer";
-import { ClientLink, MatterLink } from "@/components/ca-nexus/object-link";
-import { KeyValueList, SectionCard, StatTile } from "@/components/ca-nexus/page-blocks";
-import { PriorityBadge, TaskStatusBadge } from "@/components/ca-nexus/status-badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { KeyValueList, SectionCard } from "@/components/ca-nexus/page-blocks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -53,28 +35,27 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
 import { formatDate } from "@/lib/format";
 import { clientCategoryLabel, clientTypeLabel, serviceTypeLabel } from "@/lib/labels";
 import { getClientById, getContactsByClient, updateClientOnboarding } from "@/mock-data/clients";
 import { getComplianceCyclesByClient } from "@/mock-data/compliance";
 import { getDocumentsByClient } from "@/mock-data/documents";
 import { getMattersByClient, mockServices } from "@/mock-data/matters";
-import { getTeamById, getUserById, mockTeams, mockUsers } from "@/mock-data/users";
-import type { Client, ClientService, Contact, OnboardingStage, OnboardingStatus, ServiceType, Task } from "@/types";
+import { getTeamById, getUserById } from "@/mock-data/users";
+import type {
+  Client,
+  ComplianceCycle,
+  Contact,
+  Document,
+  Matter,
+  OnboardingStage,
+  OnboardingStatus,
+  ServiceType,
+  Team,
+  User as UserType,
+} from "@/types";
 
 interface OnboardingStep {
   id: string;
@@ -406,11 +387,11 @@ interface StepContentProps {
   step: OnboardingStep;
   client: Client;
   contacts: Contact[];
-  documents: any[];
-  matters: any[];
-  complianceCycles: any[];
-  responsibleUser: any;
-  responsibleTeam: any;
+  documents: Document[];
+  matters: Matter[];
+  complianceCycles: ComplianceCycle[];
+  responsibleUser: UserType | undefined;
+  responsibleTeam: Team | undefined;
   onComplete: (stepId: string) => void;
   isCompleted: boolean;
   onboardingStatus: OnboardingStatus;
@@ -427,15 +408,12 @@ function StepContent({
   responsibleTeam,
   onComplete,
   isCompleted,
-  onboardingStatus,
 }: StepContentProps) {
-  const [note, setNote] = useState("");
-
   switch (step.id) {
     case "profile_created":
       return <ClientProfileStep client={client} onComplete={onComplete} isCompleted={isCompleted} />;
     case "contacts_added":
-      return <ContactsStep client={client} contacts={contacts} onComplete={onComplete} isCompleted={isCompleted} />;
+      return <ContactsStep contacts={contacts} onComplete={onComplete} isCompleted={isCompleted} />;
     case "identifiers_added":
       return <IdentifiersStep client={client} onComplete={onComplete} isCompleted={isCompleted} />;
     case "services_configured":
@@ -487,7 +465,7 @@ function ClientProfileStep({
         items={[
           { label: "Client Name", value: client.name },
           { label: "Display Name", value: client.displayName },
-          { label: "Legal Name", value: client.legalName || "—" },
+          { label: "Legal Name", value: client.legalName ?? "—" },
           { label: "Entity Type", value: clientTypeLabel(client.type) },
           { label: "Category", value: clientCategoryLabel(client.category) },
           { label: "Status", value: <Badge variant="secondary">{client.status}</Badge> },
@@ -507,12 +485,10 @@ function ClientProfileStep({
 }
 
 function ContactsStep({
-  client,
   contacts,
   onComplete,
   isCompleted,
 }: {
-  client: Client;
   contacts: Contact[];
   onComplete: (id: string) => void;
   isCompleted: boolean;
@@ -580,14 +556,14 @@ function ContactsStep({
                 accessorKey: "designation",
                 header: "Designation",
                 cell: ({ row }: { row: { original: Contact } }) => (
-                  <span className="text-sm">{row.original.designation || "—"}</span>
+                  <span className="text-sm">{row.original.designation ?? "—"}</span>
                 ),
               },
               {
                 accessorKey: "department",
                 header: "Department",
                 cell: ({ row }: { row: { original: Contact } }) => (
-                  <span className="text-sm">{row.original.department || "—"}</span>
+                  <span className="text-sm">{row.original.department ?? "—"}</span>
                 ),
               },
               {
@@ -603,7 +579,7 @@ function ContactsStep({
                 accessorKey: "phone",
                 header: "Phone",
                 cell: ({ row }: { row: { original: Contact } }) => (
-                  <span className="text-sm">{row.original.phone || row.original.mobile || "—"}</span>
+                  <span className="text-sm">{row.original.phone ?? row.original.mobile ?? "—"}</span>
                 ),
               },
               {
@@ -748,13 +724,13 @@ function IdentifiersStep({
       <div className="space-y-4">
         <KeyValueList
           items={[
-            { label: "PAN", value: client.identifiers.pan || "Not recorded" },
-            { label: "TAN", value: client.identifiers.tan || "Not recorded" },
-            { label: "GSTIN", value: client.identifiers.gstin || "Not recorded" },
-            { label: "CIN / LLPIN", value: client.identifiers.cin || "Not recorded" },
-            { label: "IEC", value: client.identifiers.iec || "Not recorded" },
-            { label: "DIN(s)", value: client.identifiers.din?.join(", ") || "—" },
-            { label: "Aadhaar", value: client.identifiers.aadhaar || "Not recorded" },
+            { label: "PAN", value: client.identifiers.pan ?? "Not recorded" },
+            { label: "TAN", value: client.identifiers.tan ?? "Not recorded" },
+            { label: "GSTIN", value: client.identifiers.gstin ?? "Not recorded" },
+            { label: "CIN / LLPIN", value: client.identifiers.cin ?? "Not recorded" },
+            { label: "IEC", value: client.identifiers.iec ?? "Not recorded" },
+            { label: "DIN(s)", value: client.identifiers.din?.join(", ") ?? "—" },
+            { label: "Aadhaar", value: client.identifiers.aadhaar ?? "Not recorded" },
           ]}
         />
         <div className="flex gap-2">
@@ -940,7 +916,7 @@ function ComplianceStep({
   isCompleted,
 }: {
   client: Client;
-  complianceCycles: any[];
+  complianceCycles: ComplianceCycle[];
   onComplete: (id: string) => void;
   isCompleted: boolean;
 }) {
@@ -966,36 +942,28 @@ function ComplianceStep({
         {complianceCycles.length > 0 && (
           <div className="space-y-2">
             <h4 className="font-medium">Active Compliance Cycles</h4>
-            <DataTable
+            <DataTable<ComplianceCycle>
               data={complianceCycles}
               columns={[
                 {
                   accessorKey: "serviceName",
                   header: "Service",
-                  cell: ({ row }: { row: { original: any } }) => (
-                    <p className="font-medium">{row.original.serviceName}</p>
-                  ),
+                  cell: ({ row }) => <p className="font-medium">{row.original.serviceName}</p>,
                 },
                 {
                   accessorKey: "period",
                   header: "Period",
-                  cell: ({ row }: { row: { original: any } }) => (
-                    <span className="text-sm">{row.original.period.label}</span>
-                  ),
+                  cell: ({ row }) => <span className="text-sm">{row.original.period.label}</span>,
                 },
                 {
                   accessorKey: "status",
                   header: "Status",
-                  cell: ({ row }: { row: { original: any } }) => (
-                    <Badge variant="secondary">{row.original.status.replace(/_/g, " ")}</Badge>
-                  ),
+                  cell: ({ row }) => <Badge variant="secondary">{row.original.status.replace(/_/g, " ")}</Badge>,
                 },
                 {
                   accessorKey: "dueDate",
                   header: "Due Date",
-                  cell: ({ row }: { row: { original: any } }) => (
-                    <span className="text-sm">{formatDate(row.original.dueDate)}</span>
-                  ),
+                  cell: ({ row }) => <span className="text-sm">{formatDate(row.original.dueDate)}</span>,
                 },
               ]}
               getRowId={(row) => row.id}
@@ -1025,8 +993,8 @@ function TeamStep({
   isCompleted,
 }: {
   client: Client;
-  responsibleUser: any;
-  responsibleTeam: any;
+  responsibleUser: UserType | undefined;
+  responsibleTeam: Team | undefined;
   onComplete: (id: string) => void;
   isCompleted: boolean;
 }) {
@@ -1035,8 +1003,8 @@ function TeamStep({
       <div className="space-y-4">
         <KeyValueList
           items={[
-            { label: "Responsible User", value: responsibleUser?.fullName || "Not assigned" },
-            { label: "Responsible Team", value: responsibleTeam?.name || "Not assigned" },
+            { label: "Responsible User", value: responsibleUser?.fullName ?? "Not assigned" },
+            { label: "Responsible Team", value: responsibleTeam?.name ?? "Not assigned" },
           ]}
         />
         <div className="flex gap-2">
@@ -1059,7 +1027,7 @@ function MattersStep({
   isCompleted,
 }: {
   client: Client;
-  matters: any[];
+  matters: Matter[];
   onComplete: (id: string) => void;
   isCompleted: boolean;
 }) {
@@ -1067,13 +1035,13 @@ function MattersStep({
     <SectionCard title="Initial Matters" description="Set up first compliance matters and work items">
       <div className="space-y-4">
         {matters.length > 0 ? (
-          <DataTable
+          <DataTable<Matter>
             data={matters}
             columns={[
               {
                 accessorKey: "name",
                 header: "Matter",
-                cell: ({ row }: { row: { original: any } }) => (
+                cell: ({ row }) => (
                   <div>
                     <p className="font-medium">{row.original.name}</p>
                     <p className="text-muted-foreground text-xs">{row.original.matterNumber}</p>
@@ -1083,23 +1051,17 @@ function MattersStep({
               {
                 accessorKey: "serviceName",
                 header: "Service",
-                cell: ({ row }: { row: { original: any } }) => (
-                  <span className="text-sm">{row.original.serviceName}</span>
-                ),
+                cell: ({ row }) => <span className="text-sm">{row.original.serviceName}</span>,
               },
               {
                 accessorKey: "status",
                 header: "Status",
-                cell: ({ row }: { row: { original: any } }) => (
-                  <Badge variant="secondary">{row.original.status.replace(/_/g, " ")}</Badge>
-                ),
+                cell: ({ row }) => <Badge variant="secondary">{row.original.status.replace(/_/g, " ")}</Badge>,
               },
               {
                 accessorKey: "dueDate",
                 header: "Due Date",
-                cell: ({ row }: { row: { original: any } }) => (
-                  <span className="text-sm">{formatDate(row.original.dueDate)}</span>
-                ),
+                cell: ({ row }) => <span className="text-sm">{formatDate(row.original.dueDate)}</span>,
               },
             ]}
             getRowId={(row) => row.id}
@@ -1144,7 +1106,7 @@ function PortalStep({
         <KeyValueList
           items={[
             { label: "Portal Access", value: client.portalAccessEnabled ? "Enabled" : "Disabled" },
-            { label: "Portal User", value: client.portalUserId ? "Created" : "Not created" },
+            { label: "Portal Invitation", value: client.portalInvitationSentAt ? "Sent" : "Not sent" },
           ]}
         />
         <div className="flex gap-2">

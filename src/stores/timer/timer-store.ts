@@ -3,6 +3,17 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+interface WindowWithTimerInterval extends Window {
+  __timerInterval?: ReturnType<typeof setInterval>;
+}
+
+const getWindow = (): WindowWithTimerInterval | undefined => {
+  if (typeof window !== "undefined") {
+    return window as WindowWithTimerInterval;
+  }
+  return undefined;
+};
+
 export interface TimerState {
   isRunning: boolean;
   isPaused: boolean;
@@ -60,7 +71,7 @@ const useTimerStoreBase = create<TimerState>()(
       ...initialTimerState,
 
       startTimer: () => {
-        const { isPaused, startTimeRef, pausedTimeRef } = get();
+        const { isPaused, pausedTimeRef } = get();
         const now = Date.now();
         const newStartTimeRef = isPaused ? now - pausedTimeRef : now;
         const newPausedTimeRef = isPaused ? pausedTimeRef : 0;
@@ -80,8 +91,9 @@ const useTimerStoreBase = create<TimerState>()(
           }
         }, 1000);
 
-        if (typeof window !== "undefined") {
-          (window as any).__timerInterval = interval;
+        const win = getWindow();
+        if (win) {
+          win.__timerInterval = interval;
         }
       },
 
@@ -91,9 +103,10 @@ const useTimerStoreBase = create<TimerState>()(
           const newPausedTimeRef = Math.floor((Date.now() - startTimeRef) / 1000) + pausedTimeRef;
           set({ isRunning: false, isPaused: true, pausedTimeRef: newPausedTimeRef, startTimeRef: null });
         }
-        if (typeof window !== "undefined" && (window as any).__timerInterval) {
-          clearInterval((window as any).__timerInterval);
-          (window as any).__timerInterval = null;
+        const win = getWindow();
+        if (win?.__timerInterval) {
+          clearInterval(win.__timerInterval);
+          win.__timerInterval = undefined;
         }
       },
 
@@ -115,17 +128,19 @@ const useTimerStoreBase = create<TimerState>()(
           }
         }, 1000);
 
-        if (typeof window !== "undefined") {
-          (window as any).__timerInterval = interval;
+        const win = getWindow();
+        if (win) {
+          win.__timerInterval = interval;
         }
       },
 
       stopTimer: (onComplete) => {
         const { elapsedSeconds, matterId, taskId, description, isBillable, billingRate } = get();
 
-        if (typeof window !== "undefined" && (window as any).__timerInterval) {
-          clearInterval((window as any).__timerInterval);
-          (window as any).__timerInterval = null;
+        const win = getWindow();
+        if (win?.__timerInterval) {
+          clearInterval(win.__timerInterval);
+          win.__timerInterval = undefined;
         }
 
         const finalSeconds = elapsedSeconds;
@@ -158,9 +173,10 @@ const useTimerStoreBase = create<TimerState>()(
       setBillingRate: (billingRate) => set({ billingRate }),
 
       resetTimer: () => {
-        if (typeof window !== "undefined" && (window as any).__timerInterval) {
-          clearInterval((window as any).__timerInterval);
-          (window as any).__timerInterval = null;
+        const win = getWindow();
+        if (win?.__timerInterval) {
+          clearInterval(win.__timerInterval);
+          win.__timerInterval = undefined;
         }
         set({ ...initialTimerState });
       },
